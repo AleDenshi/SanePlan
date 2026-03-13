@@ -13,6 +13,18 @@ public class Course {
 	private ArrayList<ArrayList<Course>> coRequisites;
 	
 	// Getters
+	public String getName() {
+		return name;
+	}
+	
+	public int getCredits() {
+		return credits;
+	}
+	
+	public String getDescription() {
+		return description;
+	}
+	
 	public ArrayList<ArrayList<Course>> getPreRequisites() {
 		return preRequisites;
 	}
@@ -20,6 +32,16 @@ public class Course {
 	public ArrayList<ArrayList<Course>> getCoRequisites() {
 		return coRequisites;
 	}
+	
+	public void setPreRequisites(ArrayList<ArrayList<Course>> preRequisites) {
+		this.preRequisites = preRequisites;
+	}
+	
+	public void setCoRequisites(ArrayList<ArrayList<Course>> coRequisites) {
+		this.coRequisites = coRequisites;
+	}
+	
+	// Constructor
 	public Course(String code, int credits, String name, String description, ArrayList<SemesterType> availability) {
 		this.code = code;
 		this.credits = credits;
@@ -31,6 +53,18 @@ public class Course {
 		this.preRequisites = new ArrayList<ArrayList<Course>>();
 		this.coRequisites = new ArrayList<ArrayList<Course>>();
 	}
+	
+	// Comparison for equality
+	@Override
+	public boolean equals(Object o) {
+		if (o instanceof Course) {
+			if (((Course) o).getCode() == this.code) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 
 	public void addAvailability(SemesterType availability) {
 		if (availability == null) return;
@@ -110,8 +144,6 @@ public class Course {
                 + "}";
     }
 
-	public int getCredits() {
-		return credits;
-	}
+	
 
 }

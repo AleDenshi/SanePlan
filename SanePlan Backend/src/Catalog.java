@@ -5,6 +5,10 @@ import java.util.Scanner;
 public class Catalog {
 	private ArrayList<Course> courses;
 
+	public ArrayList<Course> getCourses() {
+		return courses;
+	}
+	
 	// TODO Move File I/O methods to database class possibly?
 	/**
 	 * Cycles through a TSV file and creates the base entries for courses, without
@@ -216,16 +220,4 @@ public class Catalog {
 		
 		plan.determineValidity();
 	}
-
-	public static void main(String[] args) {
-		
-		Catalog app = new Catalog("courses.tsv");
-		//app.readPlanFromTSV("plan.tsv");
-		
-		for (Course c : app.courses) {
-			System.out.println(c.toJson());
-		}
-		
-	}
-
 }
