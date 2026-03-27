@@ -1,20 +1,149 @@
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Scanner;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 public class Catalog {
+
 	private ArrayList<Course> courses;
 
+	/**
+	 * Constructs a Catalog object from a given file.
+	 * 
+	 * @param filename - The filename of a TSV file containing course information.
+	 */
+	public Catalog(String filename) {
+		this.courses = new ArrayList<Course>();
+		readCoursesFromTSV(filename);
+		buildRequisitesFromTSV(filename);
+	}
+
+	/**
+	 * Get the list of all Courses in the catalog.
+	 * 
+	 * @return - An ArrayList of Courses contained in the Catalog.
+	 */
 	public ArrayList<Course> getCourses() {
 		return courses;
 	}
+
+	/**
+	 * Constructs and returns a Course from a JSON object.
+	 * @param jo - The JSON Object to convert to a Course.
+	 * @return - A Course object generated from the JSON object, or null if generation fails.
+	 */
+	public Course makeCourseFromJson(JSONObject jo) {
+		try {
+			String code = jo.getString("code");
+			int credits = jo.getInt("credits");
+			String name = jo.getString("name");
+			String description = jo.getString("description");
+			JSONArray availabilityJA = jo.getJSONArray("availability");
+			ArrayList<SemesterType> availability = new ArrayList<SemesterType>();
+			
+			for (int i = 0; i < availabilityJA.length(); i++) {
+				String semesterTypeString = availabilityJA.getString(i);
+				SemesterType type = SemesterType.valueOf(semesterTypeString);
+				availability.add(type);
+			}
+			
+			Course course = new Course(code, credits, name, description, availability);
+			JSONArray preRequisiteJAJA = jo.getJSONArray("preRequisites");
+			JSONArray coRequisiteJAJA = jo.getJSONArray("coRequisites");
+
+			for (int i = 0; i < preRequisiteJAJA.length(); i++) {
+				ArrayList<Course> preRequisiteList = jsonArrayToCourseList(preRequisiteJAJA.getJSONArray(i));
+				course.addPreRequisite(preRequisiteList);
+			}
+			
+			for (int i = 0; i < coRequisiteJAJA.length(); i++) {
+				ArrayList<Course> coRequisiteList = jsonArrayToCourseList(coRequisiteJAJA.getJSONArray(i));
+				course.addCoRequisite(coRequisiteList);
+			}
+
+			return course;
+			
+		} catch (Exception e) {
+			System.out.println("Error when trying to convert JSON to Course.");
+			e.printStackTrace();
+		}
+		return null;
+	}
 	
-	// TODO Move File I/O methods to database class possibly?
+	/**
+	 * Converts a JSON Array of Course codes into an ArrayList of Courses.
+	 * @param ja - The JSON Array of Course codes.
+	 * @return - An ArrayList of Courses from the JSON Array of Course codes.
+	 */
+	public ArrayList<Course> jsonArrayToCourseList(JSONArray ja) {
+		ArrayList<Course> courseList = new ArrayList<Course>();
+		for (int i = 0; i < ja.length(); i++) {
+			Course requisite = findCourseByCode(ja.getString(i));
+			courseList.add(requisite);
+		}
+		return courseList;
+	}
+	
+	/**
+	 * Constructs and returns a Semester from a JSON object.
+	 * @param jo - The JSON Object to convert to a Semester.
+	 * @return - The Semester converted from the JSON object, or null if conversion failed.
+	 */
+	public Semester makeSemesterFromJson(JSONObject jo) {
+		try {
+			String name = jo.getString("name");
+			int maxCredits = jo.getInt("maxCredits");
+			SemesterType type = SemesterType.valueOf(jo.getString("type"));
+			
+			Semester semester = new Semester(name, type, maxCredits);
+			ArrayList<Course> semesterCourses = jsonArrayToCourseList(jo.getJSONArray("courses"));
+			for (Course c : semesterCourses) {
+				semester.addCourse(c);
+			}
+			return semester;
+			
+		} catch (Exception e) {
+			System.out.println("Error when trying to convert JSON to Semester.");
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	/**
+	 * Constructs and returns a CoursePlan from a JSON object.
+	 * @param jo - The JSON Object to convert to a CoursePlan.
+	 * @return - The CoursePlan converted from the JSON object, or null if conversion failed.
+	 */
+	public CoursePlan makeCoursePlanFromJson(JSONObject jo) {
+		try {
+			String name = jo.getString("name");
+			CoursePlan coursePlan = new CoursePlan(name);
+			JSONArray ja =  jo.getJSONArray("semesters");
+			for (int i = 0; i < ja.length(); i++) {
+				JSONObject semesterJo = ja.getJSONObject(i);
+				Semester semester = makeSemesterFromJson(semesterJo);
+				coursePlan.addSemester(semester);
+			}
+			return coursePlan;
+			
+		} catch (Exception e) {
+			System.out.println("Error when trying to convert JSON to a CoursePlan.");
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	// TODO Move File I/O methods to database or File I/O class
 	/**
 	 * Cycles through a TSV file and creates the base entries for courses, without
 	 * requisites.
 	 * 
-	 * @param filename The filename of a TSV file containing course information.
+	 * @param filename - The filename of a TSV file containing course information.
 	 */
 	private void readCoursesFromTSV(String filename) {
 		File file = new File(filename);
@@ -46,7 +175,7 @@ public class Catalog {
 	 * Cycles through a TSV file and adds pre-requisites and co-requisites to all
 	 * courses.
 	 * 
-	 * @param filename The filename of a TSV file containing course information.
+	 * @param filename - The filename of a TSV file containing course information.
 	 */
 	private void buildRequisitesFromTSV(String filename) {
 		File file = new File(filename);
@@ -122,10 +251,11 @@ public class Catalog {
 	/**
 	 * 
 	 * @param values - A String array containing values for a course.<br>
-	 * values[0]: Course code (eg. CS 225)<br>
-	 * values[1]: Course name (eg. Computer Science II)<br>
-	 * values[2]: Course credits (eg. 3)<br>
-	 * values[3]: Course description (eg. Preparing students for object oriented programming...)<br>
+	 *               values[0]: Course code (eg. CS 225)<br>
+	 *               values[1]: Course name (eg. Computer Science II)<br>
+	 *               values[2]: Course credits (eg. 3)<br>
+	 *               values[3]: Course description (eg. Preparing students for
+	 *               object oriented programming...)<br>
 	 * @return A Course created from the values.
 	 */
 	private Course makeCourseFromValues(String[] values) {
@@ -139,10 +269,12 @@ public class Catalog {
 		Course course = new Course(values[0], credits, values[2], values[3], availability);
 		return course;
 	}
-	
+
 	/**
 	 * Converts an array of Strings into an array of SemesterType enums.
-	 * @param availabilityValues - A string array containing values corresponding to the SemesterType enum.
+	 * 
+	 * @param availabilityValues - A string array containing values corresponding to
+	 *                           the SemesterType enum.
 	 * @return An ArrayList of SemesterTypes.
 	 */
 	private ArrayList<SemesterType> ValuesToAvailability(String[] availabilityValues) {
@@ -153,8 +285,8 @@ public class Catalog {
 			}
 		} catch (Exception e) {
 			// If anything happens, assume the course is available Fall and Spring.
-			//System.out.println(e);
-			//e.printStackTrace();
+			// System.out.println(e);
+			// e.printStackTrace();
 			availability.add(SemesterType.FALL);
 			availability.add(SemesterType.SPRING);
 		}
@@ -163,8 +295,10 @@ public class Catalog {
 
 	/**
 	 * Finds a course in the Catalog based on the given code.
+	 * 
 	 * @param code - A course code (eg. CS 225)
-	 * @return Either the Course corresponding to the code, or null if it cannot be found.
+	 * @return Either the Course corresponding to the code, or null if it cannot be
+	 *         found.
 	 */
 	public Course findCourseByCode(String code) {
 		if (code.equals(""))
@@ -177,47 +311,17 @@ public class Catalog {
 		return null;
 	}
 	
-	public Catalog(String filename) {
-		this.courses = new ArrayList<Course>();
-		readCoursesFromTSV(filename);
-		buildRequisitesFromTSV(filename);
-	}
-
-	// TODO Remove this debugging mess
-	public void readPlanFromTSV(String filename) {
-		File file = new File(filename);
-		String[][] result = new String[7][8];
+	// TODO REMOVE THIS FILE IO JUNK
+	public CoursePlan loadCoursePlanFromFile(String filename) {
+		String jsonContent;
 		try {
-			int i = 0;
-			Scanner scan = new Scanner(file);
-			while (scan.hasNextLine() && i < result.length) {
-				String line = scan.nextLine();
-				result[i] = line.split("	");
-				i++;
-			}
-			
-			
-			// Done scanning from file
-			scan.close();
-		} catch (Exception e) {
-			System.out.println("Error detected when reading plan from TSV:");
+			jsonContent = new String(Files.readAllBytes(Paths.get(filename)));
+			JSONObject jo = new JSONObject(jsonContent);
+			CoursePlan plan = makeCoursePlanFromJson(jo);
+			return plan;
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
-		
-		// Create a plan
-		CoursePlan plan = new CoursePlan("My Plan");
-		// Now that we have the array, let's turn it into semesters:
-		for (int i = 0; i < 8; i++) {
-			Semester sem = new Semester(result[0][i]);
-			for (int j = 1; j < 7; j++) {
-				if (i < result[j].length)
-					sem.addCourse(findCourseByCode(result[j][i]));
-			}
-			plan.addSemester(sem);
-			//System.out.println(sem);
-		}
-		
-		plan.determineValidity();
+		return null;
 	}
 }

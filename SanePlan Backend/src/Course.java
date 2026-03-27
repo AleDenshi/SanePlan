@@ -1,47 +1,26 @@
 import java.util.ArrayList;
 
 public class Course {
-	// Basic information
+
 	private String code;
 	private int credits;
 	private String name;
 	private String description;
 	private ArrayList<SemesterType> availability;
 
-	// Requisites
 	private ArrayList<ArrayList<Course>> preRequisites;
 	private ArrayList<ArrayList<Course>> coRequisites;
-	
-	// Getters
-	public String getName() {
-		return name;
-	}
-	
-	public int getCredits() {
-		return credits;
-	}
-	
-	public String getDescription() {
-		return description;
-	}
-	
-	public ArrayList<ArrayList<Course>> getPreRequisites() {
-		return preRequisites;
-	}
 
-	public ArrayList<ArrayList<Course>> getCoRequisites() {
-		return coRequisites;
-	}
-	
-	public void setPreRequisites(ArrayList<ArrayList<Course>> preRequisites) {
-		this.preRequisites = preRequisites;
-	}
-	
-	public void setCoRequisites(ArrayList<ArrayList<Course>> coRequisites) {
-		this.coRequisites = coRequisites;
-	}
-	
-	// Constructor
+	/**
+	 * Constructs a Course with required parameters.
+	 * 
+	 * @param code         - A String representing the Course's code (eg. CS 225)
+	 * @param credits      - The number of credits for the Course (eg. 3)
+	 * @param name         - The human name for the Course (eg. Computer Science II)
+	 * @param description  - The human description for the Course
+	 * @param availability - An ArrayList of availabilities for the Course (eg.
+	 *                     FALL, SPRING, SUMMER)
+	 */
 	public Course(String code, int credits, String name, String description, ArrayList<SemesterType> availability) {
 		this.code = code;
 		this.credits = credits;
@@ -49,12 +28,23 @@ public class Course {
 		this.description = description;
 		this.availability = availability;
 
-		// Construct Set and ArrayLists
 		this.preRequisites = new ArrayList<ArrayList<Course>>();
 		this.coRequisites = new ArrayList<ArrayList<Course>>();
 	}
 	
-	// Comparison for equality
+	/**
+	 * Determines whether a course is available in a semester type.
+	 * 
+	 * @param type - The semester type being examined (eg. FALL, SPRING...)
+	 * @return Whether or not the course is available that semester
+	 */
+	public boolean isType(SemesterType type) {
+		return availability.contains(type);
+	}
+
+	/**
+	 * Checks whether two Courses have an identical Course code.
+	 */
 	@Override
 	public boolean equals(Object o) {
 		if (o instanceof Course) {
@@ -64,86 +54,71 @@ public class Course {
 		}
 		return false;
 	}
-	
 
-	public void addAvailability(SemesterType availability) {
-		if (availability == null) return;
-		this.availability.add(availability);
+	@Override
+	public String toString() {
+		return this.code;
 	}
 
-	public void addPreRequisite(ArrayList<Course> preRequisite) {
-		if (preRequisite != null)
-			this.preRequisites.add(preRequisite);
+	public String toJson() {
+		JSONWriter js = new JSONWriter();
+		return "{\n"
+				+ "\"code\": \"" + code + "\",\n "
+				+ "\"name\": \"" + name + "\",\n "
+				+ "\"credits\": " + credits + ",\n "
+				+ "\"description\": \"" + description + "\",\n "
+				+ "\"availability\": " + js.listToJson(availability) + ",\n "
+				+ "\"preRequisites\": " + js.listListToJson(preRequisites) + ",\n "
+				+ "\"coRequisites\": " + js.listListToJson(coRequisites)
+				+ "\n}";
 	}
 
-	public void addCoRequisite(ArrayList<Course> coRequisite) {
-		if (coRequisite != null)
-			this.coRequisites.add(coRequisite);
-	}
-
-	// TODO: add further getters/setters/replacers for Course editing
-	
+	// GETTERS
 	public String getCode() {
 		return code;
 	}
 
-	@Override
-	public String toString() {
-		String overall = String.format("%s (%d): %s\n", code, credits, name);
-		overall += "Availabile: " + availabilityToString() + "\n";
-		overall += "Pre-Requisites: " + requisitesToString(preRequisites) + "\n";
-		overall += "Co-Requisites: " + requisitesToString(coRequisites) + "\n";
-		return overall;
-	}
-	
-	private String availabilityToString() {
-		String value = "[";
-		for (int j = 0; j < availability.size(); j++) {
-			SemesterType type = availability.get(j);
-			if (type == null) {
-				value += " NULL";
-			} else {
-				value += "\"" + type.toString() + "\"";
-			}
-			if (j < availability.size() - 1) value += ", ";
-		}
-		value += "]";
-		return value;
+	public String getName() {
+		return name;
 	}
 
-	private String requisitesToString(ArrayList<ArrayList<Course>> requisites) {
-		String value = "[";
-		for (int i = 0; i < requisites.size(); i++) {
-			value += "[";
-			ArrayList<Course> requisiteList = requisites.get(i);
-			for (int j = 0; j < requisiteList.size(); j++) {
-				Course requisite = requisiteList.get(j);
-				if (requisite == null) {
-					value += " \"NULL\"";
-				} else {
-					value += "\"" + requisite.getCode() + "\"";
-				}
-				if (j < requisiteList.size() - 1) value += ", ";
-			}
-			value += "]";
-			if (i < requisites.size() - 1) value += ", "; 
-		}
-		value += "]";
-		return value;
+	public int getCredits() {
+		return credits;
 	}
-	
-	public String toJson() {
-        return "{"
-                + "\"code\": \"" + code + "\", "
-                + "\"name\": \"" + name + "\", "
-                + "\"credits\": " + credits + ", "
-                + "\"description\": \"" + description + "\", "
-                + "\"availability\": " + availabilityToString() + ", "
-                + "\"preRequisites\": " + requisitesToString(preRequisites) + ", "
-                + "\"coRequisites\": " + requisitesToString(coRequisites)
-                + "}";
-    }
 
-	
+	public String getDescription() {
+		return description;
+	}
+
+	public ArrayList<ArrayList<Course>> getPreRequisites() {
+		return preRequisites;
+	}
+
+	public ArrayList<ArrayList<Course>> getCoRequisites() {
+		return coRequisites;
+	}
+
+	public void addAvailability(SemesterType semesterType) {
+		if (semesterType != null && !availability.contains(semesterType))
+			this.availability.add(semesterType);
+	}
+
+	public void addPreRequisite(ArrayList<Course> preRequisite) {
+		if (preRequisite != null && !preRequisites.contains(preRequisite))
+			this.preRequisites.add(preRequisite);
+	}
+
+	public void addCoRequisite(ArrayList<Course> coRequisite) {
+		if (coRequisite != null && !coRequisites.contains(coRequisite))
+			this.coRequisites.add(coRequisite);
+	}
+
+	public void setPreRequisites(ArrayList<ArrayList<Course>> preRequisites) {
+		this.preRequisites = preRequisites;
+	}
+
+	public void setCoRequisites(ArrayList<ArrayList<Course>> coRequisites) {
+		this.coRequisites = coRequisites;
+	}
 
 }
