@@ -1,0 +1,17 @@
+body {
+	text-align: left;
+}
+
+.classcol {
+	text-align: center;
+	border: solid 1px blue;
+}
+
+.course {
+	text-align: center;
+	border: solid 1px black;
+}
+
+.course .name {
+	font-size: 0.5em;
+}

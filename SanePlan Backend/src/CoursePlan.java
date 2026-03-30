@@ -20,6 +20,10 @@ public class CoursePlan {
 	public String getName() {
 		return this.name;
 	}
+	
+	public ArrayList<Semester> getSemesters() {
+		return this.semesters;
+	}
 
 	public ArrayList<String> getValidityIssues() {
 		return validityIssues;
