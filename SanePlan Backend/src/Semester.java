@@ -111,4 +111,28 @@ public class Semester {
 				+ "\"courses\": " + js.listToJson(semesterCourses)
 				+ "\n}";
 	}
+	
+	public String courseListToJson() {
+		String value = "[";
+		for (int i = 0; i < semesterCourses.size(); i++) {
+			String obj = semesterCourses.get(i).toJson();
+			if (obj != null) {
+				value += obj;
+			}
+			if (i < semesterCourses.size() - 1)
+				value += ", ";
+		}
+		value += "]";
+		return value;
+	}
+	
+	public String toFullJson() {
+		return "{\n"
+				+ "\"name\": \"" + name + "\",\n "
+				+ "\"totalCredits\": " + totalCredits + ",\n "
+				+ "\"maxCredits\": " + maxCredits + ",\n "
+				+ "\"type\": \"" + type + "\",\n "
+				+ "\"courses\": " + courseListToJson()
+				+ "\n}";
+	}
 }

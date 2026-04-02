@@ -241,8 +241,9 @@ public class Catalog {
 		for (String courseCode : courseCodes) {
 			Course courseRequisite = findCourseByCode(courseCode);
 			// If this is a blank entry, return null to indicate to skip this
-			if (courseRequisite == null)
+			if (courseRequisite == null) {
 				return null;
+			}
 			requisiteSet.add(courseRequisite);
 		}
 		return requisiteSet;

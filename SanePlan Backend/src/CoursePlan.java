@@ -11,6 +11,10 @@ public class CoursePlan {
 		return this.isValid;
 	}
 
+	/**
+	 * Construct a CoursePlan, given a name.
+	 * @param name - The name of the CoursePlan.
+	 */
 	public CoursePlan(String name) {
 		this.name = name;
 		this.semesters = new ArrayList<Semester>();
@@ -214,6 +218,20 @@ public class CoursePlan {
 		return value;
 	}
 	
+	public String semesterListToFullJson() {
+		String value = "[";
+		for (int i = 0; i < semesters.size(); i++) {
+			String obj = semesters.get(i).toFullJson();
+			if (obj != null) {
+				value += obj;
+			}
+			if (i < semesters.size() - 1)
+				value += ", ";
+		}
+		value += "]";
+		return value;
+	}
+	
 	public String toJson() {
 		JSONWriter js = new JSONWriter();
 		return "{\n"
@@ -221,6 +239,16 @@ public class CoursePlan {
 				+ "\"validity\":" + isValid + ",\n "
 				+ "\"validityIssues\":" + js.listToJson(validityIssues) + ",\n "
 				+ "\"semesters\":" + semesterListToJson() + "\n "
+				+ "}";
+	}
+	
+	public String toFullJson() {
+		JSONWriter js = new JSONWriter();
+		return "{\n"
+				+ "\"name\": \"" + name + "\",\n "
+				+ "\"validity\":" + isValid + ",\n "
+				+ "\"validityIssues\":" + js.listToJson(validityIssues) + ",\n "
+				+ "\"semesters\":" + semesterListToFullJson() + "\n "
 				+ "}";
 	}
 }

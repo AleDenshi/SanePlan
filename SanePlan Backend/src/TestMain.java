@@ -34,7 +34,7 @@ public class TestMain {
 		CoursePlan plan = tsvFileToCoursePlan("plan.tsv", "My Vertical Plan", erauCatalog);
 		System.out.println(plan.toJson());
 		CoursePlan plan2 = erauCatalog.makeCoursePlanFromJson(new JSONObject(plan.toJson()));
-		System.out.println(plan2.toJson());
+		System.out.println(plan2.toFullJson());
 	}
 
 	/**

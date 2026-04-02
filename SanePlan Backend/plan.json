@@ -1,52 +1,43 @@
 {
-"name": "My Vertical Plan",
- "validity":false,
+"name": "My SE Plan",
  "validityIssues":[],
  "semesters":[{
 "name": "FALL 2025",
- "totalCredits": 16,
  "maxCredits": 18,
  "type": "FALL",
  "courses": ["SS 1XX", "COM 122", "EGR 101", "CS 223", "MA 241", "UNIV 101"]
 }, {
 "name": "SPRING 2026",
- "totalCredits": 14,
  "maxCredits": 18,
  "type": "SPRING",
  "courses": ["CS 222", "CS 225", "CS 225L", "MA 242", "WX 201"]
 }, {
 "name": "FALL 2026",
- "totalCredits": 16,
  "maxCredits": 18,
  "type": "FALL",
  "courses": ["CEC 220", "CEC 222", "HU 14X", "COM 219", "SE 300", "HU 1XX"]
 }, {
 "name": "SPRING 2027",
- "totalCredits": 14,
  "maxCredits": 18,
  "type": "SPRING",
  "courses": ["CEC 320", "CEC 322", "COM 221", "MA 412", "BIO 120", "BIO 120L"]
 }, {
 "name": "FALL 2027",
- "totalCredits": 15,
  "maxCredits": 18,
  "type": "FALL",
  "courses": ["CEC 470", "CS 332", "CS 315", "SE 320", "CS 420"]
 }, {
 "name": "SPRING 2028",
- "totalCredits": 15,
  "maxCredits": 18,
  "type": "SPRING",
- "courses": ["CS 455", "CS 317", "SE 310", "HSI 323", "HU 3XX"]
+ "courses": ["CS 455", "CS 317", "SE 310", "CS 344", "HU 3XX"]
 }, {
 "name": "FALL 2028",
- "totalCredits": 15,
  "maxCredits": 18,
  "type": "FALL",
- "courses": ["CS 362", "CS 344", "SE 450", "MA 243", "CS 432"]
+ "courses": ["CS 362", "HSA 323", "SE 450", "MA 243", "CS 432"]
 }, {
 "name": "SPRING 2029",
- "totalCredits": 15,
  "maxCredits": 18,
  "type": "SPRING",
  "courses": ["CEC 450", "CS 350", "SE 451", "SE 420", "MA 305"]

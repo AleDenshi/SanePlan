@@ -73,6 +73,20 @@ public class Course {
 				+ "\n}";
 	}
 
+	/**
+	 * Returns the type of the class (eg. FALLONLY, SPRINGONLY) as a String.
+	 * @return - The type of the class, based on its availability.
+	 */
+	public String getTypeAsString() {
+		// TODO Add further variants for weird scenarios (SUMMERONLY?)
+		if (availability.size() == 1 && availability.get(0).equals(SemesterType.FALL)) {
+			return "FALLONLY";
+		} else if (availability.size() == 1 && availability.get(0).equals(SemesterType.SPRING)) {
+			return "SPRINGONLY";
+		}
+		return "NORMAL";
+	}
+	
 	// GETTERS
 	public String getCode() {
 		return code;

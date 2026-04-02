@@ -36,15 +36,34 @@ public class User {
 
 	/**
 	 * Adds a CoursePlan to the user.
+	 * 
 	 * @param plan - The CoursePlan to be added.
 	 */
+	// TODO Check if the plans equal by name
 	public void addPlan(CoursePlan plan) {
 		if (plan != null && !plans.contains(plan))
 			this.plans.add(plan);
 	}
 
 	/**
+	 * Replace an existing plan in a user's list of plans with a new plan, if it exists
+	 * @param plan
+	 * @return
+	 */
+	public boolean replacePlan(CoursePlan plan) {
+		CoursePlan oldPlan = findPlanByName(plan.getName());
+		if (oldPlan != null) {
+			plans.remove(oldPlan);
+			plans.add(plan);
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	/**
 	 * Finds a CoursePlan owned by the user and returns it.
+	 * 
 	 * @param planName - The name of the CoursePlan.
 	 * @return - The CoursePlan, or null if it was not found.
 	 */
@@ -55,9 +74,10 @@ public class User {
 		}
 		return null;
 	}
-	
+
 	/**
 	 * Removes a CoursePlan from a user if it is found.
+	 * 
 	 * @param planName - The name of the CoursePlan.
 	 * @return - The CoursePlan that was removed, or null if it was not found.
 	 */
@@ -71,6 +91,7 @@ public class User {
 
 	/**
 	 * Convert a String into a SHA256 hash.
+	 * 
 	 * @param input - The String to be hashed.
 	 * @return - A hash corresponding to that String.
 	 */
