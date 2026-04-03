@@ -10,31 +10,6 @@ public class TestMain {
 	public static void main(String[] args) {
 		Catalog erauCatalog = new Catalog("courses.tsv");
 
-		Course cs225 = erauCatalog.findCourseByCode("CS 225");
-
-		Semester fall25 = new Semester("FALL 2025", SemesterType.FALL);
-		fall25.addCourse(erauCatalog.findCourseByCode("CS 225"));
-		fall25.addCourse(erauCatalog.findCourseByCode("CS 225L"));
-		fall25.addCourse(erauCatalog.findCourseByCode("COM 219"));
-		fall25.addCourse(erauCatalog.findCourseByCode("EGR 101"));
-		fall25.addCourse(erauCatalog.findCourseByCode("MA 242"));
-
-		JSONObject jo2 = new JSONObject(fall25.toJson());
-		Semester sem = erauCatalog.makeSemesterFromJson(jo2);
-		System.out.println(sem.toJson());
-
-		// Database db = new Database();
-		// db.addCatalog(erauCatalog);
-		// System.out.println(db.getCourseFromCode("CS 225"));
-		// db.getRequisiteGroupsFromCourseCode("CS 225", "co");
-
-		JSONObject jo = new JSONObject(cs225.toJson());
-		Course course = erauCatalog.makeCourseFromJson(jo);
-		System.out.println(course.toJson());
-		CoursePlan plan = tsvFileToCoursePlan("plan.tsv", "My Vertical Plan", erauCatalog);
-		System.out.println(plan.toJson());
-		CoursePlan plan2 = erauCatalog.makeCoursePlanFromJson(new JSONObject(plan.toJson()));
-		System.out.println(plan2.toFullJson());
 	}
 
 	/**

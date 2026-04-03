@@ -97,7 +97,6 @@ public class WebServer {
 			contentType = "application/octet-stream";
 		}
 
-		System.out.printf("Serving %s as %s.\n", requestPath, contentType);
 		exchange.getResponseHeaders().set("Content-Type", contentType);
 		exchange.sendResponseHeaders(200, Files.size(filePath));
 		try (OutputStream os = exchange.getResponseBody()) {
@@ -347,9 +346,7 @@ public class WebServer {
 		
 		int size = 0;
 		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
-			for (Course requisite : requisiteList) {
-				size++;
-			}
+			size += requisiteList.size();
 		}
 		
 		int n = 0;

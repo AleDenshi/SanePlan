@@ -325,4 +325,34 @@ public class Catalog {
 		}
 		return null;
 	}
+	
+	/**
+	 * Cycles through a TSV file and creates a degree and its requirements from it.
+	 * 
+	 * @param filename - The filename of a TSV file containing degree information.
+	 */
+	public Degree readDegreeFromTSV(String filename) {
+		File file = new File(filename);
+		Degree d = null;
+		try {
+			Scanner scan = new Scanner(file);
+			scan.nextLine();
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				String[] values = line.split("	");
+
+				// If the file has a gap in it, skip
+				if (values.length < 3)
+					break;
+		
+			}
+			// Done scanning from file
+			scan.close();
+		} catch (Exception e) {
+			System.out.println("Error detected when reading degree from TSV:");
+			e.printStackTrace();
+		}
+		return d;
+	}
+	
 }
