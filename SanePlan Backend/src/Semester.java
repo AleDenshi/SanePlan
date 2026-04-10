@@ -70,6 +70,21 @@ public class Semester {
 		}
 		return null;
 	}
+	
+	/**
+	 * Removes and returns a Course from the Semester. Returns null if it is not found.
+	 * @param code
+	 * @return
+	 */
+	public Course removeCourseByCode(String code) {
+		for (Course course : semesterCourses) {
+			if (course.getCode().equals(code)) {
+				semesterCourses.remove(course);
+				return course;
+			}
+		}
+		return null;
+	}
 
 	// GETTERS
 	public String getName() {

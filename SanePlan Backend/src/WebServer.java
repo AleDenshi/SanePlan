@@ -44,6 +44,9 @@ public class WebServer {
 		server.createContext("/submit-plan", this::handlePlanSubmission);
 		server.createContext("/dashboard", this::handleDashboard);
 		server.createContext("/plans", this::handlePlan);
+		server.createContext("/addCourseToPlan", this::handleAddCourseToPlan);
+		server.createContext("/deleteCourseFromPlan", this::handleDeleteCourseFromPlan);
+		server.createContext("/addPlan", this::handleAddPlan);
 	}
 
 	public void start() {
@@ -113,16 +116,8 @@ public class WebServer {
 	 * @throws IOException
 	 */
 	private void handleLogin(HttpExchange exchange) throws IOException {
-
-		if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
-			exchange.sendResponseHeaders(405, -1);
-			return;
-		}
-
-		InputStream is = exchange.getRequestBody();
-		String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-
-		Map<String, String> formData = parseForm(body);
+		verifyPost(exchange);
+		Map<String,String> formData = getFormData(exchange);
 
 		String username = formData.get("username");
 		String password = formData.get("password");
@@ -139,6 +134,134 @@ public class WebServer {
 			String response = (new HTMLPage("Login failed", "<a href=\"/\"><button>Back Home</button></a>")).toString();
 			sendResponse(exchange, 401, response);
 		}
+	}
+	
+	/**
+	 * Verifies that a Http exchange is using POST, to make sure forms don't malfunction
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void verifyPost(HttpExchange exchange) throws IOException {
+		if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
+	        exchange.sendResponseHeaders(405, -1);
+	    }
+	}
+	
+	/**
+	 * Parses form data from a Http Exchange
+	 * @param exchange
+	 * @return
+	 * @throws IOException
+	 */
+	private Map<String, String> getFormData(HttpExchange exchange) throws IOException {
+		InputStream is = exchange.getRequestBody();
+		String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+		return parseForm(body);
+	}
+	
+	private void handleAddPlan(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		User user = authenticateSession(exchange);
+		Map<String,String> formData = getFormData(exchange);
+		
+		String planName = formData.get("planName");
+		// TODO Actually do something with the degree code
+		String degreeCode = formData.get("degreeCode");
+		
+		// TODO Does it make sense to do num semesters or maybe num years?
+		int numSemesters = 0;
+		String numSemestersString = formData.get("numSemesters");
+		try {
+			numSemesters = Integer.parseInt(numSemestersString);
+		} catch (Exception e) {
+			System.out.println("Unknown number of semesters " + numSemestersString);
+		}
+		boolean includeSummer = false;
+		System.out.println(formData.get("summer"));
+		if (formData.get("summer").equals("yes")) {
+			includeSummer = true;
+		}
+		System.out.println(includeSummer);
+		
+		CoursePlan newPlan = new CoursePlan(planName);
+		int year = 2026;
+		for (int i = 0; i < numSemesters; i++) {
+			SemesterType type;
+			if (i % 2 == 0) {
+				type = SemesterType.FALL;
+			} else {
+				type = SemesterType.SPRING;
+			}
+			Semester semester = new Semester(type.toString() + " " + year, type);
+			newPlan.addSemester(semester);
+			if (type == SemesterType.SPRING && includeSummer) {
+				semester = new Semester(SemesterType.SUMMER.toString() + " " + year, SemesterType.SUMMER);
+				newPlan.addSemester(semester);
+			}
+			if (i % 2 == 1) {
+				year++;
+			}
+		}
+		
+		System.out.println(newPlan.toJson());
+		user.addPlan(newPlan);
+		
+		sendBackToPreviousPage(exchange);
+	}
+	
+	/**
+	 * Handles adding a course to a course plan
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleAddCourseToPlan(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		User user = authenticateSession(exchange);
+		Map<String,String> formData = getFormData(exchange);
+		
+		String planName = formData.get("planName");
+		String code = formData.get("code");
+		
+		CoursePlan plan = user.findPlanByName(planName);
+		Course course = catalog.findCourseByCode(code);
+		
+		if (course == null || plan == null) {
+			System.out.println("Could not find plan or course.");
+		} else if (plan.findSemesterIndexByCourseCode(code) != -1) {
+			System.out.println(code + " is already present in " + planName);
+		} else {
+			System.out.println("Adding " + code + " to " + planName);
+			plan.getSemesters().get(0).addCourse(course);
+		}
+	
+		sendBackToPreviousPage(exchange);
+	}
+	
+	/**
+	 * Handles removing a course from a course plan
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleDeleteCourseFromPlan(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		User user = authenticateSession(exchange);
+		Map<String,String> formData = getFormData(exchange);
+		
+		String planName = formData.get("planName");
+		String code = formData.get("code");
+		
+		CoursePlan plan = user.findPlanByName(planName);
+		if (plan == null) {
+			System.out.println("Could not find plan.");
+		} else {
+			Course course = plan.removeCourseByCode(code);
+			if (course == null) {
+				System.out.println("Could not find course " + code + " in plan " + planName);
+			} else {
+				System.out.println("Successfully removed " + code + " in plan " + planName);
+			}
+		}
+		sendBackToPreviousPage(exchange);
 	}
 
 	/**
@@ -170,17 +293,25 @@ public class WebServer {
 	        JSONObject json = new JSONObject(body.toString());
 	        CoursePlan plan = catalog.makeCoursePlanFromJson(json);
 	        user.replacePlan(plan);
-	        
 
 	    } catch (Exception e) {
 	        e.printStackTrace();
 	        exchange.sendResponseHeaders(400, -1);
 	        return;
 	    }
-
+	    
+		sendBackToPreviousPage(exchange);
+	}
+	
+	/**
+	 * Sends the user back to the page they came from.
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void sendBackToPreviousPage(HttpExchange exchange) throws IOException {
 		String referer = exchange.getRequestHeaders().getFirst("Referer");
 		if (referer == null || referer.isEmpty()) {
-			referer = "/plans";
+			referer = "/dashboard";
 		}
 		redirectTo(exchange, referer);
 	}
@@ -238,6 +369,7 @@ public class WebServer {
 			body += String.format("<li><a href=\"/plans/%s\">%s</a></li>", plan.getName(), plan.getName());
 		}
 		body += "</ol>";
+		body += addPlanAsHTML();
 
 		String response = (new HTMLPage("Dashboard", body)).toString();
 		sendResponse(exchange, 200, response);
@@ -251,6 +383,7 @@ public class WebServer {
 	 */
 	private void handlePlan(HttpExchange exchange) throws IOException {
 		User user = authenticateSession(exchange);
+
 		if (user == null)
 			return;
 
@@ -263,7 +396,9 @@ public class WebServer {
 			String name = parts[2];
 			plan = user.findPlanByName(name);
 			if (plan != null) {
-				body = planAsHTML(plan);
+				body = addCoursePromptAsHTML(plan.getName());
+				body += deleteCoursePromptAsHTML(plan);
+				body += planAsHTML(plan);
 			} else {
 				body = "<h1>Plan not found.</h1>";
 			}
@@ -273,8 +408,53 @@ public class WebServer {
 		}
 		String response = (new HTMLPage(plan.getName(), body)).toString();
 		sendResponse(exchange, 200, response);
-
 	}
+	
+	private String addPlanAsHTML() {
+		String html = "<form method=\"POST\" action=\"/addPlan\">\n"
+				+ "<label>Plan Name:</label><br>\n"
+				+ "<input type=\"text\" name=\"planName\"><br>\n"
+				+ "<label>Degree Code (optional):</label><br>\n"
+				+ "<input type=\"text\" name=\"degreeCode\"><br>\n" // TODO Make this a list of all degrees!
+				+ "<label>Number of Semesters:</label><br>\n"
+				+ "<input type=\"number\" name=\"numSemesters\"><br>\n"
+				+ "<input type=\"checkbox\" id=\"summer\" name=\"summer\" value=\"yes\">\n"
+				+ "<label for=\"summer\">Include Summer Semesters</label><br>\n"
+				+ "<input type=\"submit\" value=\"Create New Plan\">\n"
+				+ "</form>";
+		return html;
+	}
+		
+	private String addCoursePromptAsHTML(String planName) {
+		String html = "";
+		html += "<form class=\"courseedit\" method=\"POST\" action=\"/addCourseToPlan\">\n"
+				+ "<input type=\"hidden\" name=\"planName\" value=\""+ planName + "\">\n"
+				+ "<label>Enter a Course Code to Add:</label><br>\n"
+				+ "<input type=\"text\" name=\"code\"><br><br>\n"
+				+ "<input type=\"submit\" value=\"Add Course\">\n"
+				+ "</form>";
+		
+		return html;
+	}
+	
+	private String deleteCoursePromptAsHTML(CoursePlan plan) {
+		String html = "";
+		html += "<form class=\"courseedit\" method=\"POST\" action=\"/deleteCourseFromPlan\">\n"
+				+ "<input type=\"hidden\" name=\"planName\" value=\""+ plan.getName() + "\">\n";
+		html += "<label for=\"code\">Choose a Course to Delete:</label><br>\n"
+				+ "    <select id=\"code\" name=\"code\">\n";
+				
+		for (Course course : plan.getFlattenedCourseList()) {
+			html += String.format("<option value=\"%s\">%s</option>", course.getCode(), course.getCode());
+		}
+		html += "</select><br><br>";
+		
+		html += "<input type=\"submit\" value=\"Remove Course\">\n"
+				+ "</form>";
+		
+		return html;
+	}
+
 
 	private String validityAsHTML(CoursePlan plan) {
 		String html = "";

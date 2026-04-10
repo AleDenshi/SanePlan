@@ -51,6 +51,34 @@ public class CoursePlan {
 		}
 		return -1;
 	}
+	
+	/**
+	 * Returns a 1-dimensional list of all courses in the plan.
+	 * @return
+	 */
+	public ArrayList<Course> getFlattenedCourseList() {
+		ArrayList<Course> flatCourseList = new ArrayList<Course>();
+		for (Semester semester : semesters) {
+			for (Course course : semester.getSemesterCourses()) {
+				flatCourseList.add(course);
+			}
+		}
+		return flatCourseList;
+	}
+	
+	/**
+	 * Removes a Course from the CoursePlan by code. Returns null if it is not found.
+	 * @param code
+	 * @return
+	 */
+	public Course removeCourseByCode(String code) {
+		Semester semester = findSemesterByCourseCode(code);
+		if (semester != null) {
+			Course course = semester.removeCourseByCode(code);
+			return course;
+		}
+		return null;
+	}
 
 	public void determineValidity() {
 		// Begin by assuming all is well

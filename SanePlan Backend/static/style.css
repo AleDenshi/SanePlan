@@ -39,6 +39,13 @@ ol, ul {
   z-index: 0;
 }
 
+.courseedit {
+	display: inline-block;
+	margin: 0.5em;
+	padding: 0.25em;
+	border: 1px solid black;
+}
+
 .invalidplan {
 	background-color: red;
 }
@@ -76,6 +83,10 @@ ol, ul {
 
 .column[data-type="SPRING"] {
 	background-color: pink;
+}
+
+.column[data-type="SUMMER"] {
+	background-color: yellow;
 }
 
 .course {
