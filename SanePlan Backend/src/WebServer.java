@@ -124,7 +124,7 @@ public class WebServer {
 	 */
 	private User getUserByName(String username) {
 		for (User user : users) {
-			if (user.getUsername().equals(username))
+			if (user.getUsername().equalsIgnoreCase(username))
 				return user;
 		}
 		return null;
@@ -466,7 +466,7 @@ public class WebServer {
 		authenticateAdmin(exchange);
 		Map<String, String> formData = getFormData(exchange);
 		
-		String username = formData.get("username");
+		String username = formData.get("username").toLowerCase();
 		String password = formData.get("password");
 		String passwordConfirm = formData.get("passwordConfirm");
 		boolean isAdmin = formData.containsKey("admin");

@@ -302,10 +302,11 @@ public class Catalog {
 	 *         found.
 	 */
 	public Course findCourseByCode(String code) {
+		code = code.toUpperCase().replace(" ", "");
 		if (code.equals(""))
 			return null;
 		for (Course course : this.courses) {
-			if (course.getCode().equals(code))
+			if (course.getCode().replace(" ", "").equals(code))
 				return course;
 		}
 		System.out.println("WARN: Could not find " + code);
