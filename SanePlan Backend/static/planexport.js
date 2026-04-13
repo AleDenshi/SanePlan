@@ -30,7 +30,7 @@ document.getElementById('exportForm').addEventListener('submit', async function(
   };
 
   try {
-    const response = await fetch('/submit-plan', {
+    const response = await fetch('/submitPlan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

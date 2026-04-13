@@ -46,6 +46,13 @@ ol, ul {
 	border: 1px solid black;
 }
 
+.planedit {
+	display: inline-block;
+	margin: 0.5em;
+	padding: 0.25em;
+	border: 1px solid black;
+}
+
 .invalidplan {
 	background-color: red;
 }

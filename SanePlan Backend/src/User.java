@@ -7,11 +7,17 @@ public class User {
 	String username;
 	String passwordHash;
 	ArrayList<CoursePlan> plans;
+	boolean admin;
 
-	public User(String username, String password) {
+	public User(String username, String password, boolean isAdmin) {
 		this.username = username;
 		setPassword(password);
 		this.plans = new ArrayList<CoursePlan>();
+		this.admin = isAdmin;
+	}
+	
+	public boolean isAdmin() {
+		return admin;
 	}
 
 	public String getUsername() {
@@ -44,6 +50,7 @@ public class User {
 		if (plan != null && !plans.contains(plan))
 			this.plans.add(plan);
 	}
+
 
 	/**
 	 * Replace an existing plan in a user's list of plans with a new plan, if it exists
@@ -87,6 +94,19 @@ public class User {
 			return plan;
 		plans.remove(plan);
 		return plan;
+	}
+	
+	/**
+	 * Comparison method
+	 */
+	@Override
+	public boolean equals(Object o) {
+		if (o instanceof User) {
+			if (((User) o).getUsername().equals(this.username)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

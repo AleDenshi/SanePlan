@@ -34,19 +34,27 @@ public class WebServer {
 
 		// TODO REMOVE THIS FOR PRODUCTION!
 		// This is just the test user.
-		User testUser = new User("test", "password");
+		User testUser = new User("test", "password", false);
+		// This is the test admin.
+		User testAdmin = new User("admin", "admin", true);
 		CoursePlan plan = catalog.loadCoursePlanFromFile("plan.json");
 		testUser.addPlan(plan);
 		users.add(testUser);
+		users.add(testAdmin);
 
 		server.createContext("/", this::handleStaticFile);
 		server.createContext("/login", this::handleLogin);
-		server.createContext("/submit-plan", this::handlePlanSubmission);
+		server.createContext("/submitPlan", this::handlePlanSubmission);
 		server.createContext("/dashboard", this::handleDashboard);
 		server.createContext("/plans", this::handlePlan);
 		server.createContext("/addCourseToPlan", this::handleAddCourseToPlan);
 		server.createContext("/deleteCourseFromPlan", this::handleDeleteCourseFromPlan);
 		server.createContext("/addPlan", this::handleAddPlan);
+		server.createContext("/deletePlan", this::handleDeletePlan);
+		server.createContext("/addUser", this::handleAddUser);
+		server.createContext("/deleteUser", this::handleDeleteUser);
+		server.createContext("/addCourse", this::handleAddCourse);
+		server.createContext("/deleteCourse", this::handleDeleteCourse);
 	}
 
 	public void start() {
@@ -109,33 +117,69 @@ public class WebServer {
 	}
 
 	/**
-	 * Authenticate the user if they have entered the correct password, and assign
-	 * them a temporary cookie.
+	 * Returns a user given a username.
 	 * 
-	 * @param exchange
-	 * @throws IOException
+	 * @param username - A String username of a User in the system.
+	 * @return The User, or null if the username doesn't exist.
 	 */
-	private void handleLogin(HttpExchange exchange) throws IOException {
-		verifyPost(exchange);
-		Map<String,String> formData = getFormData(exchange);
-
-		String username = formData.get("username");
-		String password = formData.get("password");
-
-		User matchedUser = getUserByName(username);
-
-		if (matchedUser != null && matchedUser.isPassword(password)) {
-			String token = UUID.randomUUID().toString();
-			sessionTokens.put(token, username);
-
-			exchange.getResponseHeaders().add("Set-Cookie", "sessionToken=" + token + "; Path=/");
-			redirectTo(exchange, "/dashboard");
-		} else {
-			String response = (new HTMLPage("Login failed", "<a href=\"/\"><button>Back Home</button></a>")).toString();
-			sendResponse(exchange, 401, response);
+	private User getUserByName(String username) {
+		for (User user : users) {
+			if (user.getUsername().equals(username))
+				return user;
 		}
+		return null;
 	}
+
+	/**
+	 * Returns the session token from a HTTP exchange for user authentication.
+	 * 
+	 * @param exchange - The HttpExchange being analyzed.
+	 * @return A String representing a user's unique token.
+	 */
+	private String getSessionToken(HttpExchange exchange) {
 	
+		List<String> cookies = exchange.getRequestHeaders().get("Cookie");
+	
+		if (cookies == null)
+			return null;
+	
+		for (String cookieHeader : cookies) {
+			String[] cookiePairs = cookieHeader.split(";");
+	
+			for (String cookie : cookiePairs) {
+				String[] kv = cookie.trim().split("=");
+	
+				if (kv.length == 2 && kv[0].equals("sessionToken")) {
+					return kv[1];
+				}
+			}
+		}
+	
+		return null;
+	}
+
+	// TODO This is awful. But I can't think of another way to do this monstrous task.
+	private String requisitesToList(Course course) {
+		String list = "";
+		
+		int size = 0;
+		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
+			size += requisiteList.size();
+		}
+		
+		int n = 0;
+		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
+			for (Course requisite : requisiteList) {
+				list += requisite.getCode();
+				if (n != size-1) {
+					list += ",";
+				}
+				n++;
+			}
+		}
+		return list;
+	}
+
 	/**
 	 * Verifies that a Http exchange is using POST, to make sure forms don't malfunction
 	 * @param exchange
@@ -148,7 +192,28 @@ public class WebServer {
 	}
 	
 	/**
-	 * Parses form data from a Http Exchange
+	 * Takes in HTML form data and converts it to a Map of Strings to Strings.
+	 * 
+	 * @param formData - The HTML form data.
+	 * @return A Map of key Strings to value Strings.
+	 * @throws UnsupportedEncodingException
+	 */
+	private Map<String, String> parseForm(String formData) throws UnsupportedEncodingException {
+		Map<String, String> map = new HashMap<>();
+	
+		String[] pairs = formData.split("&");
+		for (String pair : pairs) {
+			String[] kv = pair.split("=");
+			String key = URLDecoder.decode(kv[0], "UTF-8");
+			String value = kv.length > 1 ? URLDecoder.decode(kv[1], "UTF-8") : "";
+			map.put(key, value);
+		}
+	
+		return map;
+	}
+
+	/**
+	 * Parses form data from a Http Exchange.
 	 * @param exchange
 	 * @return
 	 * @throws IOException
@@ -159,6 +224,169 @@ public class WebServer {
 		return parseForm(body);
 	}
 	
+	/**
+	 * Redirects the user on the current page to the URL location
+	 * 
+	 * @param exchange - The HttpExchange being handled.
+	 * @param location - The URL to redirect the user to (eg. /dashboard).
+	 * @throws IOException
+	 */
+	private void redirectTo(HttpExchange exchange, String location) throws IOException {
+		exchange.getResponseHeaders().add("Location", location);
+		exchange.sendResponseHeaders(302, -1);
+	}
+
+	/**
+	 * Sends the user back to the page they came from.
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void sendBackToPreviousPage(HttpExchange exchange) throws IOException {
+		String referer = exchange.getRequestHeaders().getFirst("Referer");
+		if (referer == null || referer.isEmpty()) {
+			referer = "/dashboard";
+		}
+		redirectTo(exchange, referer);
+	}
+
+	/**
+	 * Given a HttpExchange, returns the User currently authenticated, or null if no
+	 * user is authenticated.
+	 * 
+	 * @param exchange
+	 * @return
+	 * @throws IOException
+	 */
+	private User authenticateSession(HttpExchange exchange) throws IOException {
+		String token = getSessionToken(exchange);
+		if (token == null || !sessionTokens.containsKey(token)) {
+			String response = "<h1>401 - Unauthorized</h1><p>Please log in.</p>";
+			sendResponse(exchange, 401, response);
+			return null;
+		}
+	
+		String username = sessionTokens.get(token);
+		return getUserByName(username);
+	}
+
+	/**
+	 * Given a HttpExchange, returns the Admin if the User is authenticated and an Admin, or null if these both are not fulfilled.
+	 * Returns 401 if the user isn't logged in at all, and returns 403 (forbidden) if the user is authenticated but not an admin.
+	 * @param exchange
+	 * @return
+	 * @throws IOException
+	 */
+	private User authenticateAdmin(HttpExchange exchange) throws IOException {
+		User admin = authenticateSession(exchange);
+		if (admin.isAdmin()) {
+			return admin;
+		} else {
+			String response = "<h1>403 - Forbidden</h1><p>You are not an admin.</p>";
+			sendResponse(exchange, 403, response);
+			return null;
+		}
+	}
+
+	/**
+	 * Authenticate the user if they have entered the correct password, and assign
+	 * them a temporary cookie.
+	 * 
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleLogin(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		Map<String,String> formData = getFormData(exchange);
+	
+		String username = formData.get("username");
+		String password = formData.get("password");
+	
+		User matchedUser = getUserByName(username);
+	
+		if (matchedUser != null && matchedUser.isPassword(password)) {
+			String token = UUID.randomUUID().toString();
+			sessionTokens.put(token, username);
+	
+			exchange.getResponseHeaders().add("Set-Cookie", "sessionToken=" + token + "; Path=/");
+			redirectTo(exchange, "/dashboard");
+		} else {
+			String response = (new HTMLPage("Login failed", "<a href=\"/\"><button>Back Home</button></a>")).toString();
+			sendResponse(exchange, 401, response);
+		}
+	}
+
+	/**
+	 * Gives an authenticated user a basic dashboard.
+	 * 
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleDashboard(HttpExchange exchange) throws IOException {
+		User user = authenticateSession(exchange);
+		if (user == null)
+			return;
+	
+		// TODO Don't do it this way. Implement some kind of template system.
+		String body = "<h1>Welcome, " + user.getUsername() + "!</h1>" + "<p>You are logged in.</p>";
+	
+		body += "<p>Here is a list of your course plans:</p>";
+		body += "<ol>";
+		for (CoursePlan plan : user.getPlans()) {
+			// TODO Add delete button to this list entry?
+			body += String.format("<li><a href=\"/plans/%s\">%s</a></li>", plan.getName(), plan.getName());
+		}
+		body += "</ol><br>";
+		body += addPlanAsHTML();
+		body += deletePlanAsHTML(user.getPlans());
+		if (user.isAdmin()) {
+			body += addUserAsHTML();
+			body += deleteUserAsHTML();
+		}
+	
+		String response = (new HTMLPage("Dashboard", body)).toString();
+		sendResponse(exchange, 200, response);
+	}
+
+	/**
+	 * Displays a plan to the user.
+	 * 
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handlePlan(HttpExchange exchange) throws IOException {
+		User user = authenticateSession(exchange);
+	
+		if (user == null)
+			return;
+	
+		String path = exchange.getRequestURI().getPath();
+		String[] parts = path.split("/");
+		String body;
+		CoursePlan plan;
+	
+		if (parts.length >= 3 && !parts[2].isEmpty()) {
+			String name = parts[2];
+			plan = user.findPlanByName(name);
+			if (plan != null) {
+				body = addCoursePromptAsHTML(plan.getName());
+				body += deleteCoursePromptAsHTML(plan);
+				body += planAsHTML(plan);
+			} else {
+				body = "<h1>Plan not found.</h1>";
+			}
+		} else {
+			redirectTo(exchange, "/dashboard");
+			return;
+		}
+		String response = (new HTMLPage(plan.getName(), body)).toString();
+		sendResponse(exchange, 200, response);
+	}
+
+	/**
+	 * Handles the adding of a new Course Plan to a user's list of plans.
+	 * @param exchange
+	 * @throws IOException
+	 */
 	private void handleAddPlan(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
@@ -167,7 +395,7 @@ public class WebServer {
 		String planName = formData.get("planName");
 		// TODO Actually do something with the degree code
 		String degreeCode = formData.get("degreeCode");
-		
+		System.out.println(formData);
 		// TODO Does it make sense to do num semesters or maybe num years?
 		int numSemesters = 0;
 		String numSemestersString = formData.get("numSemesters");
@@ -176,35 +404,120 @@ public class WebServer {
 		} catch (Exception e) {
 			System.out.println("Unknown number of semesters " + numSemestersString);
 		}
-		boolean includeSummer = false;
-		System.out.println(formData.get("summer"));
-		if (formData.get("summer").equals("yes")) {
-			includeSummer = true;
-		}
-		System.out.println(includeSummer);
+		boolean includeSummer = formData.containsKey("summer");
 		
-		CoursePlan newPlan = new CoursePlan(planName);
-		int year = 2026;
-		for (int i = 0; i < numSemesters; i++) {
-			SemesterType type;
-			if (i % 2 == 0) {
-				type = SemesterType.FALL;
-			} else {
-				type = SemesterType.SPRING;
-			}
-			Semester semester = new Semester(type.toString() + " " + year, type);
-			newPlan.addSemester(semester);
-			if (type == SemesterType.SPRING && includeSummer) {
-				semester = new Semester(SemesterType.SUMMER.toString() + " " + year, SemesterType.SUMMER);
+		if (!planName.isBlank() && numSemesters != 0) {
+			System.out.println("Attempting to create plan named " + planName + " with " + numSemesters + " semesters and summer: " + includeSummer);
+			
+			CoursePlan newPlan = new CoursePlan(planName);
+			int year = 2026;
+			for (int i = 0; i < numSemesters; i++) {
+				SemesterType type;
+				if (i % 2 == 0) {
+					type = SemesterType.FALL;
+				} else {
+					type = SemesterType.SPRING;
+				}
+				Semester semester = new Semester(type.toString() + " " + year, type);
 				newPlan.addSemester(semester);
+				if (type == SemesterType.SPRING && includeSummer) {
+					semester = new Semester(SemesterType.SUMMER.toString() + " " + year, SemesterType.SUMMER);
+					newPlan.addSemester(semester);
+				}
+				if (i % 2 == 1) {
+					year++;
+				}
 			}
-			if (i % 2 == 1) {
-				year++;
+			
+			user.addPlan(newPlan);
+		}
+		sendBackToPreviousPage(exchange);
+	}
+
+	/**
+	 * Handles the deletion of a plan from a user's list of plans.
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleDeletePlan(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		User user = authenticateSession(exchange);
+		Map<String,String> formData = getFormData(exchange);
+		String planName = formData.get("planName");
+		if (planName != null) {
+			CoursePlan plan = user.removePlanByName(planName);
+			if (plan == null) {
+				System.out.println(planName + " not found, cannot be deleted.");
 			}
+		} else {
+			System.out.println("No plan name found.");
 		}
 		
-		System.out.println(newPlan.toJson());
-		user.addPlan(newPlan);
+		sendBackToPreviousPage(exchange);
+	}
+	
+	/**
+	 * Handles the adding of a new user to the system.
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleAddUser(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		authenticateAdmin(exchange);
+		Map<String, String> formData = getFormData(exchange);
+		
+		String username = formData.get("username");
+		String password = formData.get("password");
+		String passwordConfirm = formData.get("passwordConfirm");
+		boolean isAdmin = formData.containsKey("admin");
+		
+		if (getUserByName(username) != null) {
+			// TODO send a message to the user about this
+		} else if (!password.equals(passwordConfirm)) {
+			// TODO send a message to the user about this
+		} else {
+			User newUser = new User(username, password, isAdmin);
+			users.add(newUser);
+		}
+		
+		sendBackToPreviousPage(exchange);
+	}
+	
+	private void handleDeleteUser(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		User user = authenticateAdmin(exchange);
+		Map<String, String> formData = getFormData(exchange);
+		String username = formData.get("username");
+		
+		User userToDelete = getUserByName(username);
+		if (userToDelete == null) {
+			// TODO send a message to the user about this
+		} else if (userToDelete.equals(user)) {
+			// TODO send a message to the user about this
+		} else {
+			// TODO We definitely should send a confirmation message at least
+			users.remove(userToDelete);
+			System.out.println("Removed " + username);
+		}
+		
+		sendBackToPreviousPage(exchange);
+	}
+	
+	private void handleAddCourse(HttpExchange exchange) throws IOException {
+		// TODO Write this!
+	}
+	
+	private void handleDeleteCourse(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		authenticateAdmin(exchange);
+		Map<String, String> formData = getFormData(exchange);
+		String courseCode = formData.get("courseCode");
+		Course course = catalog.findCourseByCode(courseCode);
+		if (course == null) {
+			// TODO Send a message to the user about this
+		} else {
+			catalog.getCourses().remove(course);
+		}
 		
 		sendBackToPreviousPage(exchange);
 	}
@@ -303,115 +616,60 @@ public class WebServer {
 		sendBackToPreviousPage(exchange);
 	}
 	
-	/**
-	 * Sends the user back to the page they came from.
-	 * @param exchange
-	 * @throws IOException
-	 */
-	private void sendBackToPreviousPage(HttpExchange exchange) throws IOException {
-		String referer = exchange.getRequestHeaders().getFirst("Referer");
-		if (referer == null || referer.isEmpty()) {
-			referer = "/dashboard";
-		}
-		redirectTo(exchange, referer);
+	private String addCourseAsHTML() {
+		return "";
 	}
-
-	/**
-	 * Redirects the user on the current page to the URL location
-	 * 
-	 * @param exchange - The HttpExchange being handled.
-	 * @param location - The URL to redirect the user to (eg. /dashboard).
-	 * @throws IOException
-	 */
-	private void redirectTo(HttpExchange exchange, String location) throws IOException {
-		exchange.getResponseHeaders().add("Location", location);
-		exchange.sendResponseHeaders(302, -1);
-	}
-
-	/**
-	 * Given a HttpExchange, returns the User currently authenticated, or null if no
-	 * user is authenticated.
-	 * 
-	 * @param exchange
-	 * @return
-	 * @throws IOException
-	 */
-	private User authenticateSession(HttpExchange exchange) throws IOException {
-		String token = getSessionToken(exchange);
-		if (token == null || !sessionTokens.containsKey(token)) {
-			String response = "<h1>401 - Unauthorized</h1><p>Please log in.</p>";
-			sendResponse(exchange, 401, response);
-			return null;
+	
+	private String deleteCourseAsHTML() {
+		String html = """
+				<form class="courseedit" method="POST" action="/deleteCourse">
+				<p>Delete a Course</p>
+				<label>Choose a Course to delete:</label>
+				<select id="courseCode" name="courseCode">
+				""";
+		for (Course course : catalog.getCourses()) {
+			html += String.format("<option value=\"%s\">%s</option>", course.getCode(), course.getCode());
 		}
-
-		String username = sessionTokens.get(token);
-		return getUserByName(username);
+		
+		html += "<br/><input type=\"submit\" value=\"Delete Course\"></form>";
+		return html;
 	}
-
-	/**
-	 * Gives an authenticated user a basic dashboard.
-	 * 
-	 * @param exchange
-	 * @throws IOException
-	 */
-	private void handleDashboard(HttpExchange exchange) throws IOException {
-		User user = authenticateSession(exchange);
-		if (user == null)
-			return;
-
-		// TODO Don't do it this way. Implement some kind of template system.
-		String body = "<h1>Welcome, " + user.getUsername() + "!</h1>" + "<p>You are logged in.</p>";
-
-		body += "<p>Here is a list of your course plans:</p>";
-		body += "<ol>";
-		for (CoursePlan plan : user.getPlans()) {
-			// TODO Add delete button to this list entry?
-			body += String.format("<li><a href=\"/plans/%s\">%s</a></li>", plan.getName(), plan.getName());
-		}
-		body += "</ol>";
-		body += addPlanAsHTML();
-
-		String response = (new HTMLPage("Dashboard", body)).toString();
-		sendResponse(exchange, 200, response);
+	
+	private String addUserAsHTML() {
+		String html = """
+				<form class="useredit" method="POST" action="/addUser">
+				<p>Add a new user</p>
+				<label>Username:</label>
+				<input type="text" name="username"><br>
+				<label>Password:</label>
+				<input type="password" name="password"><br>
+				<label>Confirm Password:</label>
+				<input type="password" name="passwordConfirm"><br>
+				<input type="checkbox" id="isAdmin" value="yes">
+				<label>Make an Admin</label><br/>
+				<input type="submit" value="Create New User">
+				</form>
+				""";
+		return html;
 	}
-
-	/**
-	 * Displays a plan to the user.
-	 * 
-	 * @param exchange
-	 * @throws IOException
-	 */
-	private void handlePlan(HttpExchange exchange) throws IOException {
-		User user = authenticateSession(exchange);
-
-		if (user == null)
-			return;
-
-		String path = exchange.getRequestURI().getPath();
-		String[] parts = path.split("/");
-		String body;
-		CoursePlan plan;
-
-		if (parts.length >= 3 && !parts[2].isEmpty()) {
-			String name = parts[2];
-			plan = user.findPlanByName(name);
-			if (plan != null) {
-				body = addCoursePromptAsHTML(plan.getName());
-				body += deleteCoursePromptAsHTML(plan);
-				body += planAsHTML(plan);
-			} else {
-				body = "<h1>Plan not found.</h1>";
-			}
-		} else {
-			redirectTo(exchange, "/dashboard");
-			return;
+	
+	private String deleteUserAsHTML() {
+		String html = """
+				<form class="useredit" method="POST" action="/deleteUser">
+				<p>Delete a user</p>
+				<label>Choose a user to delete:</label>
+				<select id="username" name="username">
+				""";
+		for (User user : users) {
+			html += String.format("<option value=\"%s\">%s</option>", user.getUsername(), user.getUsername());
 		}
-		String response = (new HTMLPage(plan.getName(), body)).toString();
-		sendResponse(exchange, 200, response);
+		
+		html += "<br/><input type=\"submit\" value=\"Delete User\"></form>";
+		return html;
 	}
 	
 	private String addPlanAsHTML() {
-		String html = "<form method=\"POST\" action=\"/addPlan\">\n"
+		String html = "<form class=\"planedit\" method=\"POST\" action=\"/addPlan\">\n"
 				+ "<label>Plan Name:</label><br>\n"
 				+ "<input type=\"text\" name=\"planName\"><br>\n"
 				+ "<label>Degree Code (optional):</label><br>\n"
@@ -422,6 +680,23 @@ public class WebServer {
 				+ "<label for=\"summer\">Include Summer Semesters</label><br>\n"
 				+ "<input type=\"submit\" value=\"Create New Plan\">\n"
 				+ "</form>";
+		return html;
+	}
+
+	
+	private String deletePlanAsHTML(ArrayList<CoursePlan> plans) {
+		String html = "<form class=\"planedit\" method=\"POST\" action=\"/deletePlan\">\n";
+		
+		html += "<label for=\"planName\">Choose a Plan to Delete:</label><br>\n"
+				+ "    <select id=\"planName\" name=\"planName\">\n";
+				
+		for (CoursePlan plan : plans) {
+			html += String.format("<option value=\"%s\">%s</option>", plan.getName(), plan.getName());
+		}
+		html += "</select><br><br>";
+		
+		html += "<input type=\"submit\" value=\"Delete Plan\">\n"
+		+ "</form>";
 		return html;
 	}
 		
@@ -510,98 +785,13 @@ public class WebServer {
 
 	private String courseAsHTML(Course course) {
 		String template = """
-				<div class="course" draggable="true" id="%s" style="height: %spx" data-type="%s" data-prereq="%s">
+				<div class="course" draggable="true" id="%s" style="height: %spx" data-type="%s" data-prereq="%s" data-credits="%s">
 				<p class="code">%s</p>
 				<p class="name">%s</p>
 				<p class="credits">%s</p>
 				</div>
 						""";
 		return String.format(template, course.getCode(), course.getCredits() * 40, course.getTypeAsString(),
-				requisitesToList(course), course.getCode(), course.getName(), course.getCredits());
-	}
-	
-	// TODO This is awful. But I can't think of another way to do this monstrous task.
-	private String requisitesToList(Course course) {
-		String list = "";
-		
-		int size = 0;
-		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
-			size += requisiteList.size();
-		}
-		
-		int n = 0;
-		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
-			for (Course requisite : requisiteList) {
-				list += requisite.getCode();
-				if (n != size-1) {
-					list += ",";
-				}
-				n++;
-			}
-		}
-		return list;
-	}
-
-	/**
-	 * Returns the session token from a HTTP exchange for user authentication.
-	 * 
-	 * @param exchange - The HttpExchange being analyzed.
-	 * @return A String representing a user's unique token.
-	 */
-	private String getSessionToken(HttpExchange exchange) {
-
-		List<String> cookies = exchange.getRequestHeaders().get("Cookie");
-
-		if (cookies == null)
-			return null;
-
-		for (String cookieHeader : cookies) {
-			String[] cookiePairs = cookieHeader.split(";");
-
-			for (String cookie : cookiePairs) {
-				String[] kv = cookie.trim().split("=");
-
-				if (kv.length == 2 && kv[0].equals("sessionToken")) {
-					return kv[1];
-				}
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * Returns a user given a username.
-	 * 
-	 * @param username - A String username of a User in the system.
-	 * @return The User, or null if the username doesn't exist.
-	 */
-	private User getUserByName(String username) {
-		for (User user : users) {
-			if (user.getUsername().equals(username))
-				return user;
-		}
-		return null;
-	}
-
-	/**
-	 * Takes in HTML form data and converts it to a Map of Strings to Strings.
-	 * 
-	 * @param formData - The HTML form data.
-	 * @return A Map of key Strings to value Strings.
-	 * @throws UnsupportedEncodingException
-	 */
-	private Map<String, String> parseForm(String formData) throws UnsupportedEncodingException {
-		Map<String, String> map = new HashMap<>();
-
-		String[] pairs = formData.split("&");
-		for (String pair : pairs) {
-			String[] kv = pair.split("=");
-			String key = URLDecoder.decode(kv[0], "UTF-8");
-			String value = kv.length > 1 ? URLDecoder.decode(kv[1], "UTF-8") : "";
-			map.put(key, value);
-		}
-
-		return map;
+				requisitesToList(course), course.getCredits(), course.getCode(), course.getName(), course.getCredits());
 	}
 }
