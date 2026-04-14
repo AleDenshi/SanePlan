@@ -34,8 +34,10 @@ public class Catalog {
 
 	/**
 	 * Constructs and returns a Course from a JSON object.
+	 * 
 	 * @param jo - The JSON Object to convert to a Course.
-	 * @return - A Course object generated from the JSON object, or null if generation fails.
+	 * @return - A Course object generated from the JSON object, or null if
+	 *         generation fails.
 	 */
 	public Course makeCourseFromJson(JSONObject jo) {
 		try {
@@ -45,13 +47,13 @@ public class Catalog {
 			String description = jo.getString("description");
 			JSONArray availabilityJA = jo.getJSONArray("availability");
 			ArrayList<SemesterType> availability = new ArrayList<SemesterType>();
-			
+
 			for (int i = 0; i < availabilityJA.length(); i++) {
 				String semesterTypeString = availabilityJA.getString(i);
 				SemesterType type = SemesterType.valueOf(semesterTypeString);
 				availability.add(type);
 			}
-			
+
 			Course course = new Course(code, credits, name, description, availability);
 			JSONArray preRequisiteJAJA = jo.getJSONArray("preRequisites");
 			JSONArray coRequisiteJAJA = jo.getJSONArray("coRequisites");
@@ -60,23 +62,24 @@ public class Catalog {
 				ArrayList<Course> preRequisiteList = jsonArrayToCourseList(preRequisiteJAJA.getJSONArray(i));
 				course.addPreRequisite(preRequisiteList);
 			}
-			
+
 			for (int i = 0; i < coRequisiteJAJA.length(); i++) {
 				ArrayList<Course> coRequisiteList = jsonArrayToCourseList(coRequisiteJAJA.getJSONArray(i));
 				course.addCoRequisite(coRequisiteList);
 			}
 
 			return course;
-			
+
 		} catch (Exception e) {
 			System.out.println("Error when trying to convert JSON to Course.");
 			e.printStackTrace();
 		}
 		return null;
 	}
-	
+
 	/**
 	 * Converts a JSON Array of Course codes into an ArrayList of Courses.
+	 * 
 	 * @param ja - The JSON Array of Course codes.
 	 * @return - An ArrayList of Courses from the JSON Array of Course codes.
 	 */
@@ -88,56 +91,215 @@ public class Catalog {
 		}
 		return courseList;
 	}
-	
+
 	/**
 	 * Constructs and returns a Semester from a JSON object.
+	 * 
 	 * @param jo - The JSON Object to convert to a Semester.
-	 * @return - The Semester converted from the JSON object, or null if conversion failed.
+	 * @return - The Semester converted from the JSON object, or null if conversion
+	 *         failed.
 	 */
 	public Semester makeSemesterFromJson(JSONObject jo) {
 		try {
 			String name = jo.getString("name");
 			int maxCredits = jo.getInt("maxCredits");
 			SemesterType type = SemesterType.valueOf(jo.getString("type"));
-			
+
 			Semester semester = new Semester(name, type, maxCredits);
 			ArrayList<Course> semesterCourses = jsonArrayToCourseList(jo.getJSONArray("courses"));
 			for (Course c : semesterCourses) {
 				semester.addCourse(c);
 			}
 			return semester;
-			
+
 		} catch (Exception e) {
 			System.out.println("Error when trying to convert JSON to Semester.");
 			e.printStackTrace();
 		}
 		return null;
 	}
-	
+
 	/**
 	 * Constructs and returns a CoursePlan from a JSON object.
+	 * 
 	 * @param jo - The JSON Object to convert to a CoursePlan.
-	 * @return - The CoursePlan converted from the JSON object, or null if conversion failed.
+	 * @return - The CoursePlan converted from the JSON object, or null if
+	 *         conversion failed.
 	 */
 	public CoursePlan makeCoursePlanFromJson(JSONObject jo) {
 		try {
 			String name = jo.getString("name");
 			CoursePlan coursePlan = new CoursePlan(name);
-			JSONArray ja =  jo.getJSONArray("semesters");
+			JSONArray ja = jo.getJSONArray("semesters");
 			for (int i = 0; i < ja.length(); i++) {
 				JSONObject semesterJo = ja.getJSONObject(i);
 				Semester semester = makeSemesterFromJson(semesterJo);
 				coursePlan.addSemester(semester);
 			}
 			return coursePlan;
-			
+
 		} catch (Exception e) {
 			System.out.println("Error when trying to convert JSON to a CoursePlan.");
 			e.printStackTrace();
 		}
 		return null;
 	}
-	
+
+	public CoursePlan readCoursePlanFromTSV(String filename) {
+		File file = new File(filename);
+		CoursePlan plan = new CoursePlan(filename);
+
+		try {
+			Scanner scan = new Scanner(file);
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				String[] values = line.split("	");
+
+				if (values.length < 1)
+					continue;
+
+				// TODO Change this name to something more descriptive
+				String name = values[0];
+				SemesterType type = SemesterType.valueOf(name.split(" ")[0]);
+				// Assuming these are laid out like "FALL 2025" etc...
+				Semester semester = new Semester(name, type);
+
+				for (int i = 1; i < values.length; i++) {
+					String[] codes = values[i].split("/");
+					Course courseToAdd = findCourseByCode(codes[0]);
+
+					// If this is a singleton course, add it and move on
+					if (codes.length == 1 && courseToAdd != null) {
+						semester.addCourse(courseToAdd);
+						// If this isn't a singleton course, we must build a meta course
+					} else {
+						String metaName = "";
+						ArrayList<Course> equivalencies = new ArrayList<Course>();
+						// Go through all ORed courses (eg. HU:3:LL/SS:3:LL)
+						for (int j = 0; j < codes.length; j++) {
+
+							String code = codes[j];
+							// TODO Instead of the raw code, use something else
+							metaName += code.split(":")[0];
+							if (j != codes.length - 1) {
+								metaName += " or ";
+							}
+							
+							ArrayList<Course> newEquivalencies = equivalentCoursesFromString(code);
+							
+							if (newEquivalencies != null) {
+								equivalencies.addAll(newEquivalencies);
+							} else {
+								System.out.println("Some fatal error on building " + code);
+							}
+						}
+						int highestCredits = determineHighestCredits(equivalencies);
+						courseToAdd = new MetaCourse(values[i], highestCredits, metaName, equivalencies);
+						courses.add(courseToAdd);
+						semester.addCourse(courseToAdd);
+					}
+				}
+				plan.addSemester(semester);
+
+			}
+			scan.close();
+
+		} catch (Exception e) {
+			System.out.println("Error detected when reading plan from TSV:");
+			e.printStackTrace();
+		}
+		return plan;
+	}
+
+	public int determineHighestCredits(ArrayList<Course> equivalencies) {
+		int highest = 0;
+		for (Course course : equivalencies) {
+			if (course.getCredits() > highest) {
+				highest = course.getCredits();
+			}
+		}
+		return highest;
+	}
+
+	/**
+	 * Converts an equivalency string into an ArrayList of equivalent courses
+	 * 
+	 * @param equivalencyString - A string formatted as follows:
+	 *                          CATEGORY:CREDITS:LEVEL (eg. HU:3:14X or MA:3:HL)
+	 * @return
+	 */
+	public ArrayList<Course> equivalentCoursesFromString(String equivalencyString) {
+		String[] courseValues = equivalencyString.split(":");
+		if (courseValues.length > 1) {
+
+			String category = courseValues[0];
+			int requiredCredits = Integer.parseInt(courseValues[1]);
+
+			// Determine min and max levels for the MetaCourse
+			int minLevel, maxLevel;
+			String levelString;
+			if (courseValues.length > 2) {
+				levelString = courseValues[2];
+			} else {
+				levelString = "";
+			}
+
+			switch (levelString) {
+			case "":
+				minLevel = 0;
+				maxLevel = 700; // TODO This is arbitrary. Is there an actual max level?
+				break;
+			case "HL":
+				minLevel = 300;
+				maxLevel = 499;
+				break;
+			case "LL":
+				// TODO Is "lower level" always 100?
+				minLevel = 100;
+				maxLevel = 499;
+				break;
+			default:
+				String min = levelString.replace('X', '0');
+				String max = levelString.replace('X', '9');
+				minLevel = Integer.parseInt(min);
+				maxLevel = Integer.parseInt(max);
+				break;
+			}
+			return getEquivalent(category, requiredCredits, minLevel, maxLevel);
+		}
+		return null;
+
+	}
+
+	/**
+	 * Returns a list of equivalent courses that match the given parameters.
+	 * 
+	 * @param category
+	 * @param requiredCredits
+	 * @param minLevel
+	 * @param maxLevel
+	 * @return
+	 */
+	private ArrayList<Course> getEquivalent(String category, int requiredCredits, int minLevel, int maxLevel) {
+		ArrayList<Course> equivalencies = new ArrayList<Course>();
+		boolean elective = category.contains("ELECT");
+		
+		for (Course equivalent : courses) {
+			if (equivalent instanceof MetaCourse) continue;
+			String[] codeValues = equivalent.getCode().split(" ");
+			String thisCategory = codeValues[0];
+			int thisLevel = Integer.parseInt(codeValues[1].replaceAll("[^0-9]", ""));
+			
+			if (thisLevel >= minLevel && thisLevel <= maxLevel && equivalent.getCredits() == requiredCredits) {
+				// TODO This elective system assumes all courses are acceptable. Is that actually OK?
+				if (thisCategory.equals(category) || elective) {
+					equivalencies.add(equivalent);
+				}
+			}
+		}
+		return equivalencies;
+	}
+
 	// TODO Move File I/O methods to database or File I/O class
 	/**
 	 * Cycles through a TSV file and creates the base entries for courses, without
@@ -239,12 +401,23 @@ public class Catalog {
 	private ArrayList<Course> getCoursesFromCodeArray(String[] courseCodes) {
 		ArrayList<Course> requisiteSet = new ArrayList<Course>();
 		for (String courseCode : courseCodes) {
+			if (courseCode.isEmpty())
+				continue;
+			
 			Course courseRequisite = findCourseByCode(courseCode);
 			// If this is a blank entry, return null to indicate to skip this
 			if (courseRequisite == null) {
-				return null;
+				System.out.println("[WARN] Couldn't find " + courseCode);
+				if (courseCode.contains(":")) {
+					requisiteSet.addAll(equivalentCoursesFromString(courseCode));
+					System.out.println("[INFO] Built " + courseCode);
+				} else {
+					System.out.println("[WARN] Couldn't build " + courseCode);
+					return null;
+				}
+			} else {
+				requisiteSet.add(courseRequisite);
 			}
-			requisiteSet.add(courseRequisite);
 		}
 		return requisiteSet;
 	}
@@ -301,7 +474,8 @@ public class Catalog {
 	 * @return Either the Course corresponding to the code, or null if it cannot be
 	 *         found.
 	 */
-	public Course findCourseByCode(String code) {
+	public Course findCourseByCode(String searchCode) {
+		String code = searchCode;
 		code = code.toUpperCase().replace(" ", "");
 		if (code.equals(""))
 			return null;
@@ -309,10 +483,9 @@ public class Catalog {
 			if (course.getCode().replace(" ", "").equals(code))
 				return course;
 		}
-		System.out.println("WARN: Could not find " + code);
 		return null;
 	}
-	
+
 	// TODO REMOVE THIS FILE IO JUNK
 	public CoursePlan loadCoursePlanFromFile(String filename) {
 		String jsonContent;
@@ -326,7 +499,7 @@ public class Catalog {
 		}
 		return null;
 	}
-	
+
 	/**
 	 * Cycles through a TSV file and creates a degree and its requirements from it.
 	 * 
@@ -345,7 +518,7 @@ public class Catalog {
 				// If the file has a gap in it, skip
 				if (values.length < 3)
 					break;
-		
+
 			}
 			// Done scanning from file
 			scan.close();
@@ -355,5 +528,5 @@ public class Catalog {
 		}
 		return d;
 	}
-	
+
 }

@@ -39,6 +39,8 @@ public class WebServer {
 		User testAdmin = new User("admin", "admin", true);
 		CoursePlan plan = catalog.loadCoursePlanFromFile("plan.json");
 		testUser.addPlan(plan);
+		CoursePlan newplan = catalog.readCoursePlanFromTSV("plan.tsv");
+		testUser.addPlan(newplan);
 		users.add(testUser);
 		users.add(testAdmin);
 
@@ -55,6 +57,7 @@ public class WebServer {
 		server.createContext("/deleteUser", this::handleDeleteUser);
 		server.createContext("/addCourse", this::handleAddCourse);
 		server.createContext("/deleteCourse", this::handleDeleteCourse);
+		server.createContext("/editMetaCourse", this::handleEditMetaCourse);
 	}
 
 	public void start() {
@@ -80,6 +83,7 @@ public class WebServer {
 
 	/**
 	 * Provides users with static files from /static when they ask for them.
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
@@ -137,41 +141,42 @@ public class WebServer {
 	 * @return A String representing a user's unique token.
 	 */
 	private String getSessionToken(HttpExchange exchange) {
-	
+
 		List<String> cookies = exchange.getRequestHeaders().get("Cookie");
-	
+
 		if (cookies == null)
 			return null;
-	
+
 		for (String cookieHeader : cookies) {
 			String[] cookiePairs = cookieHeader.split(";");
-	
+
 			for (String cookie : cookiePairs) {
 				String[] kv = cookie.trim().split("=");
-	
+
 				if (kv.length == 2 && kv[0].equals("sessionToken")) {
 					return kv[1];
 				}
 			}
 		}
-	
+
 		return null;
 	}
 
-	// TODO This is awful. But I can't think of another way to do this monstrous task.
+	// TODO This is awful. But I can't think of another way to do this monstrous
+	// task.
 	private String requisitesToList(Course course) {
 		String list = "";
-		
+
 		int size = 0;
 		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
 			size += requisiteList.size();
 		}
-		
+
 		int n = 0;
 		for (ArrayList<Course> requisiteList : course.getPreRequisites()) {
 			for (Course requisite : requisiteList) {
 				list += requisite.getCode();
-				if (n != size-1) {
+				if (n != size - 1) {
 					list += ",";
 				}
 				n++;
@@ -181,16 +186,18 @@ public class WebServer {
 	}
 
 	/**
-	 * Verifies that a Http exchange is using POST, to make sure forms don't malfunction
+	 * Verifies that a Http exchange is using POST, to make sure forms don't
+	 * malfunction
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
 	private void verifyPost(HttpExchange exchange) throws IOException {
 		if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
-	        exchange.sendResponseHeaders(405, -1);
-	    }
+			exchange.sendResponseHeaders(405, -1);
+		}
 	}
-	
+
 	/**
 	 * Takes in HTML form data and converts it to a Map of Strings to Strings.
 	 * 
@@ -200,7 +207,7 @@ public class WebServer {
 	 */
 	private Map<String, String> parseForm(String formData) throws UnsupportedEncodingException {
 		Map<String, String> map = new HashMap<>();
-	
+
 		String[] pairs = formData.split("&");
 		for (String pair : pairs) {
 			String[] kv = pair.split("=");
@@ -208,12 +215,13 @@ public class WebServer {
 			String value = kv.length > 1 ? URLDecoder.decode(kv[1], "UTF-8") : "";
 			map.put(key, value);
 		}
-	
+
 		return map;
 	}
 
 	/**
 	 * Parses form data from a Http Exchange.
+	 * 
 	 * @param exchange
 	 * @return
 	 * @throws IOException
@@ -223,7 +231,7 @@ public class WebServer {
 		String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 		return parseForm(body);
 	}
-	
+
 	/**
 	 * Redirects the user on the current page to the URL location
 	 * 
@@ -238,6 +246,7 @@ public class WebServer {
 
 	/**
 	 * Sends the user back to the page they came from.
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
@@ -264,14 +273,17 @@ public class WebServer {
 			sendResponse(exchange, 401, response);
 			return null;
 		}
-	
+
 		String username = sessionTokens.get(token);
 		return getUserByName(username);
 	}
 
 	/**
-	 * Given a HttpExchange, returns the Admin if the User is authenticated and an Admin, or null if these both are not fulfilled.
-	 * Returns 401 if the user isn't logged in at all, and returns 403 (forbidden) if the user is authenticated but not an admin.
+	 * Given a HttpExchange, returns the Admin if the User is authenticated and an
+	 * Admin, or null if these both are not fulfilled. Returns 401 if the user isn't
+	 * logged in at all, and returns 403 (forbidden) if the user is authenticated
+	 * but not an admin.
+	 * 
 	 * @param exchange
 	 * @return
 	 * @throws IOException
@@ -296,17 +308,17 @@ public class WebServer {
 	 */
 	private void handleLogin(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
-		Map<String,String> formData = getFormData(exchange);
-	
+		Map<String, String> formData = getFormData(exchange);
+
 		String username = formData.get("username");
 		String password = formData.get("password");
-	
+
 		User matchedUser = getUserByName(username);
-	
+
 		if (matchedUser != null && matchedUser.isPassword(password)) {
 			String token = UUID.randomUUID().toString();
 			sessionTokens.put(token, username);
-	
+
 			exchange.getResponseHeaders().add("Set-Cookie", "sessionToken=" + token + "; Path=/");
 			redirectTo(exchange, "/dashboard");
 		} else {
@@ -325,10 +337,10 @@ public class WebServer {
 		User user = authenticateSession(exchange);
 		if (user == null)
 			return;
-	
+
 		// TODO Don't do it this way. Implement some kind of template system.
 		String body = "<h1>Welcome, " + user.getUsername() + "!</h1>" + "<p>You are logged in.</p>";
-	
+
 		body += "<p>Here is a list of your course plans:</p>";
 		body += "<ol>";
 		for (CoursePlan plan : user.getPlans()) {
@@ -342,7 +354,7 @@ public class WebServer {
 			body += addUserAsHTML();
 			body += deleteUserAsHTML();
 		}
-	
+
 		String response = (new HTMLPage("Dashboard", body)).toString();
 		sendResponse(exchange, 200, response);
 	}
@@ -355,15 +367,15 @@ public class WebServer {
 	 */
 	private void handlePlan(HttpExchange exchange) throws IOException {
 		User user = authenticateSession(exchange);
-	
+
 		if (user == null)
 			return;
-	
+
 		String path = exchange.getRequestURI().getPath();
 		String[] parts = path.split("/");
 		String body;
 		CoursePlan plan;
-	
+		
 		if (parts.length >= 3 && !parts[2].isEmpty()) {
 			String name = parts[2];
 			plan = user.findPlanByName(name);
@@ -384,14 +396,15 @@ public class WebServer {
 
 	/**
 	 * Handles the adding of a new Course Plan to a user's list of plans.
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
 	private void handleAddPlan(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
-		Map<String,String> formData = getFormData(exchange);
-		
+		Map<String, String> formData = getFormData(exchange);
+
 		String planName = formData.get("planName");
 		// TODO Actually do something with the degree code
 		String degreeCode = formData.get("degreeCode");
@@ -405,10 +418,11 @@ public class WebServer {
 			System.out.println("Unknown number of semesters " + numSemestersString);
 		}
 		boolean includeSummer = formData.containsKey("summer");
-		
+
 		if (!planName.isBlank() && numSemesters != 0) {
-			System.out.println("Attempting to create plan named " + planName + " with " + numSemesters + " semesters and summer: " + includeSummer);
-			
+			System.out.println("Attempting to create plan named " + planName + " with " + numSemesters
+					+ " semesters and summer: " + includeSummer);
+
 			CoursePlan newPlan = new CoursePlan(planName);
 			int year = 2026;
 			for (int i = 0; i < numSemesters; i++) {
@@ -428,7 +442,7 @@ public class WebServer {
 					year++;
 				}
 			}
-			
+
 			user.addPlan(newPlan);
 		}
 		sendBackToPreviousPage(exchange);
@@ -436,13 +450,14 @@ public class WebServer {
 
 	/**
 	 * Handles the deletion of a plan from a user's list of plans.
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
 	private void handleDeletePlan(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
-		Map<String,String> formData = getFormData(exchange);
+		Map<String, String> formData = getFormData(exchange);
 		String planName = formData.get("planName");
 		if (planName != null) {
 			CoursePlan plan = user.removePlanByName(planName);
@@ -452,12 +467,13 @@ public class WebServer {
 		} else {
 			System.out.println("No plan name found.");
 		}
-		
+
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	/**
 	 * Handles the adding of a new user to the system.
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
@@ -465,12 +481,12 @@ public class WebServer {
 		verifyPost(exchange);
 		authenticateAdmin(exchange);
 		Map<String, String> formData = getFormData(exchange);
-		
+
 		String username = formData.get("username").toLowerCase();
 		String password = formData.get("password");
 		String passwordConfirm = formData.get("passwordConfirm");
 		boolean isAdmin = formData.containsKey("admin");
-		
+
 		if (getUserByName(username) != null) {
 			// TODO send a message to the user about this
 		} else if (!password.equals(passwordConfirm)) {
@@ -479,16 +495,16 @@ public class WebServer {
 			User newUser = new User(username, password, isAdmin);
 			users.add(newUser);
 		}
-		
+
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	private void handleDeleteUser(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateAdmin(exchange);
 		Map<String, String> formData = getFormData(exchange);
 		String username = formData.get("username");
-		
+
 		User userToDelete = getUserByName(username);
 		if (userToDelete == null) {
 			// TODO send a message to the user about this
@@ -499,14 +515,14 @@ public class WebServer {
 			users.remove(userToDelete);
 			System.out.println("Removed " + username);
 		}
-		
+
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	private void handleAddCourse(HttpExchange exchange) throws IOException {
 		// TODO Write this!
 	}
-	
+
 	private void handleDeleteCourse(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		authenticateAdmin(exchange);
@@ -518,26 +534,27 @@ public class WebServer {
 		} else {
 			catalog.getCourses().remove(course);
 		}
-		
+
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	/**
 	 * Handles adding a course to a course plan
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
 	private void handleAddCourseToPlan(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
-		Map<String,String> formData = getFormData(exchange);
-		
+		Map<String, String> formData = getFormData(exchange);
+
 		String planName = formData.get("planName");
 		String code = formData.get("code");
-		
+
 		CoursePlan plan = user.findPlanByName(planName);
 		Course course = catalog.findCourseByCode(code);
-		
+
 		if (course == null || plan == null) {
 			System.out.println("Could not find plan or course.");
 		} else if (plan.findSemesterIndexByCourseCode(code) != -1) {
@@ -546,23 +563,24 @@ public class WebServer {
 			System.out.println("Adding " + code + " to " + planName);
 			plan.getSemesters().get(0).addCourse(course);
 		}
-	
+
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	/**
 	 * Handles removing a course from a course plan
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
 	private void handleDeleteCourseFromPlan(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
-		Map<String,String> formData = getFormData(exchange);
-		
+		Map<String, String> formData = getFormData(exchange);
+
 		String planName = formData.get("planName");
 		String code = formData.get("code");
-		
+
 		CoursePlan plan = user.findPlanByName(planName);
 		if (plan == null) {
 			System.out.println("Could not find plan.");
@@ -576,50 +594,81 @@ public class WebServer {
 		}
 		sendBackToPreviousPage(exchange);
 	}
+	
+	private void handleEditMetaCourse(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		User user = authenticateSession(exchange);
+		Map<String, String> formData = getFormData(exchange);
+		System.out.println("Handling meta course...");
+
+		String planName = formData.get("planName");
+		String metaCode = formData.get("metaCode");
+		String code = null;
+		if (!formData.containsKey("code")) {
+			sendBackToPreviousPage(exchange);
+			return;
+		} else {
+			code = formData.get("code");
+		}
+		
+		Course course = catalog.findCourseByCode(code);
+		
+		CoursePlan plan = user.findPlanByName(planName);
+		if (plan == null) {
+			// TODO we should print out an error to the user
+		} else if (planName == null || metaCode == null || code == null) {
+			// TODO we should print out an error to the user
+		} else {
+			plan.replaceCourseByCodes(metaCode, course);
+		}
+		System.out.println("Done!");
+		sendBackToPreviousPage(exchange);
+	}
 
 	/**
 	 * Parses a JSON course plan from a user and replaces it in their profile.
+	 * 
 	 * @param exchange
 	 * @throws IOException
 	 */
 	private void handlePlanSubmission(HttpExchange exchange) throws IOException {
 		if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
-	        exchange.sendResponseHeaders(405, -1);
-	        return;
-	    }
-		
+			exchange.sendResponseHeaders(405, -1);
+			return;
+		}
+
 		User user = authenticateSession(exchange);
 		if (user == null)
 			return;
 		System.out.println("Receiving plan from user " + user.getUsername());
 
-	    InputStream input = exchange.getRequestBody();
-	    BufferedReader reader = new BufferedReader(new InputStreamReader(input, "utf-8"));
+		InputStream input = exchange.getRequestBody();
+		BufferedReader reader = new BufferedReader(new InputStreamReader(input, "utf-8"));
 
-	    StringBuilder body = new StringBuilder();
-	    String line;
-	    while ((line = reader.readLine()) != null) {
-	        body.append(line);
-	    }
+		StringBuilder body = new StringBuilder();
+		String line;
+		while ((line = reader.readLine()) != null) {
+			body.append(line);
+		}
 
-	    try {
-	        JSONObject json = new JSONObject(body.toString());
-	        CoursePlan plan = catalog.makeCoursePlanFromJson(json);
-	        user.replacePlan(plan);
+		try {
+			JSONObject json = new JSONObject(body.toString());
+			CoursePlan plan = catalog.makeCoursePlanFromJson(json);
+			user.replacePlan(plan);
 
-	    } catch (Exception e) {
-	        e.printStackTrace();
-	        exchange.sendResponseHeaders(400, -1);
-	        return;
-	    }
-	    
+		} catch (Exception e) {
+			e.printStackTrace();
+			exchange.sendResponseHeaders(400, -1);
+			return;
+		}
+
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	private String addCourseAsHTML() {
 		return "";
 	}
-	
+
 	private String deleteCourseAsHTML() {
 		String html = """
 				<form class="courseedit" method="POST" action="/deleteCourse">
@@ -630,11 +679,11 @@ public class WebServer {
 		for (Course course : catalog.getCourses()) {
 			html += String.format("<option value=\"%s\">%s</option>", course.getCode(), course.getCode());
 		}
-		
+
 		html += "<br/><input type=\"submit\" value=\"Delete Course\"></form>";
 		return html;
 	}
-	
+
 	private String addUserAsHTML() {
 		String html = """
 				<form class="useredit" method="POST" action="/addUser">
@@ -652,7 +701,7 @@ public class WebServer {
 				""";
 		return html;
 	}
-	
+
 	private String deleteUserAsHTML() {
 		String html = """
 				<form class="useredit" method="POST" action="/deleteUser">
@@ -663,73 +712,70 @@ public class WebServer {
 		for (User user : users) {
 			html += String.format("<option value=\"%s\">%s</option>", user.getUsername(), user.getUsername());
 		}
-		
-		html += "<br/><input type=\"submit\" value=\"Delete User\"></form>";
-		return html;
-	}
-	
-	private String addPlanAsHTML() {
-		String html = "<form class=\"planedit\" method=\"POST\" action=\"/addPlan\">\n"
-				+ "<label>Plan Name:</label><br>\n"
-				+ "<input type=\"text\" name=\"planName\"><br>\n"
-				+ "<label>Degree Code (optional):</label><br>\n"
-				+ "<input type=\"text\" name=\"degreeCode\"><br>\n" // TODO Make this a list of all degrees!
-				+ "<label>Number of Semesters:</label><br>\n"
-				+ "<input type=\"number\" name=\"numSemesters\"><br>\n"
-				+ "<input type=\"checkbox\" id=\"summer\" name=\"summer\" value=\"yes\">\n"
-				+ "<label for=\"summer\">Include Summer Semesters</label><br>\n"
-				+ "<input type=\"submit\" value=\"Create New Plan\">\n"
-				+ "</form>";
+
+		html += "</select><br/><input type=\"submit\" value=\"Delete User\"></form>";
 		return html;
 	}
 
-	
+	private String addPlanAsHTML() {
+		String html = "<form class=\"planedit\" method=\"POST\" action=\"/addPlan\">\n"
+				+ "<label>Plan Name:</label><br>\n" + "<input type=\"text\" name=\"planName\"><br>\n"
+				+ "<label>Degree Code (optional):</label><br>\n" + "<input type=\"text\" name=\"degreeCode\"><br>\n" // TODO
+																														// Make
+																														// this
+																														// a
+																														// list
+																														// of
+																														// all
+																														// degrees!
+				+ "<label>Number of Semesters:</label><br>\n" + "<input type=\"number\" name=\"numSemesters\"><br>\n"
+				+ "<input type=\"checkbox\" id=\"summer\" name=\"summer\" value=\"yes\">\n"
+				+ "<label for=\"summer\">Include Summer Semesters</label><br>\n"
+				+ "<input type=\"submit\" value=\"Create New Plan\">\n" + "</form>";
+		return html;
+	}
+
 	private String deletePlanAsHTML(ArrayList<CoursePlan> plans) {
 		String html = "<form class=\"planedit\" method=\"POST\" action=\"/deletePlan\">\n";
-		
+
 		html += "<label for=\"planName\">Choose a Plan to Delete:</label><br>\n"
 				+ "    <select id=\"planName\" name=\"planName\">\n";
-				
+
 		for (CoursePlan plan : plans) {
 			html += String.format("<option value=\"%s\">%s</option>", plan.getName(), plan.getName());
 		}
 		html += "</select><br><br>";
-		
-		html += "<input type=\"submit\" value=\"Delete Plan\">\n"
-		+ "</form>";
+
+		html += "<input type=\"submit\" value=\"Delete Plan\">\n" + "</form>";
 		return html;
 	}
-		
+
 	private String addCoursePromptAsHTML(String planName) {
 		String html = "";
 		html += "<form class=\"courseedit\" method=\"POST\" action=\"/addCourseToPlan\">\n"
-				+ "<input type=\"hidden\" name=\"planName\" value=\""+ planName + "\">\n"
-				+ "<label>Enter a Course Code to Add:</label><br>\n"
-				+ "<input type=\"text\" name=\"code\"><br><br>\n"
-				+ "<input type=\"submit\" value=\"Add Course\">\n"
-				+ "</form>";
-		
+				+ "<input type=\"hidden\" name=\"planName\" value=\"" + planName + "\">\n"
+				+ "<label>Enter a Course Code to Add:</label><br>\n" + "<input type=\"text\" name=\"code\"><br><br>\n"
+				+ "<input type=\"submit\" value=\"Add Course\">\n" + "</form>";
+
 		return html;
 	}
-	
+
 	private String deleteCoursePromptAsHTML(CoursePlan plan) {
 		String html = "";
 		html += "<form class=\"courseedit\" method=\"POST\" action=\"/deleteCourseFromPlan\">\n"
-				+ "<input type=\"hidden\" name=\"planName\" value=\""+ plan.getName() + "\">\n";
+				+ "<input type=\"hidden\" name=\"planName\" value=\"" + plan.getName() + "\">\n";
 		html += "<label for=\"code\">Choose a Course to Delete:</label><br>\n"
 				+ "    <select id=\"code\" name=\"code\">\n";
-				
+
 		for (Course course : plan.getFlattenedCourseList()) {
 			html += String.format("<option value=\"%s\">%s</option>", course.getCode(), course.getCode());
 		}
 		html += "</select><br><br>";
-		
-		html += "<input type=\"submit\" value=\"Remove Course\">\n"
-				+ "</form>";
-		
+
+		html += "<input type=\"submit\" value=\"Remove Course\">\n" + "</form>";
+
 		return html;
 	}
-
 
 	private String validityAsHTML(CoursePlan plan) {
 		String html = "";
@@ -758,32 +804,33 @@ public class WebServer {
 		html += "<div class=\"board\" id=\"" + plan.getName() + "\">\n";
 
 		for (Semester semester : semesters) {
-			html += semesterAsHTML(semester);
+			html += semesterAsHTML(semester, plan);
 		}
-		
+
 		html += "</div>\n";
-		html+= "<svg id=\"arrows\"></svg>\n";
+		html += "<svg id=\"arrows\"></svg>\n";
 		html += "<script src=\"/planedit.js\" defer></script>\n";
-		html += "<form id=\"exportForm\">\n"
-				+ "  <button type=\"submit\">Edit Plan</button>\n"
-				+ "</form>";
-		
+		html += "<form id=\"exportForm\">\n" + "  <button type=\"submit\">Edit Plan</button>\n" + "</form>";
+
 		html += "<script src=\"/planexport.js\" defer></script>\n";
-		
+
 		return html;
 	}
 
-	private String semesterAsHTML(Semester semester) {
+	private String semesterAsHTML(Semester semester, CoursePlan plan) {
 		String html = "<div class=\"column\" data-type=\"" + semester.getType() + "\">";
 		html += "<h3>" + semester.getName() + "</h3>";
 		for (Course course : semester.getSemesterCourses()) {
-			html += courseAsHTML(course);
+			html += courseAsHTML(course, plan);
 		}
 		html += "</div>\n";
 		return html;
 	}
 
-	private String courseAsHTML(Course course) {
+	private String courseAsHTML(Course course, CoursePlan plan) {
+		if (course instanceof MetaCourse) {
+			return metaCourseAsHTML((MetaCourse) course, plan);
+		}
 		String template = """
 				<div class="course" draggable="true" id="%s" style="height: %spx" data-type="%s" data-prereq="%s" data-credits="%s">
 				<p class="code">%s</p>
@@ -793,5 +840,35 @@ public class WebServer {
 						""";
 		return String.format(template, course.getCode(), course.getCredits() * 40, course.getTypeAsString(),
 				requisitesToList(course), course.getCredits(), course.getCode(), course.getName(), course.getCredits());
+	}
+
+	/**
+	 * Special method for generating meta courses
+	 * @param course
+	 * @param planName
+	 * @return
+	 */
+	private String metaCourseAsHTML(MetaCourse course, CoursePlan plan) {
+		String template = """
+				<div class="course" draggable="true" id="%s" style="height: %spx" data-type="META" data-prereq="" data-credits="%s">
+				<p class="code">%s</p>
+				<p class="name">%s</p>
+				<p class="credits">%s</p>
+				<form class="meta" method="POST" action="/editMetaCourse">
+				<input type="hidden" name="planName" value="%s">
+				<input type="hidden" name="metaCode" value="%s">
+				<select id="code" name="code">
+				""";
+		String html = String.format(template, course.getCode(), course.getCredits() * 40, course.getCredits(),
+				course.getCode(), course.getName(), course.getCredits(), plan.getName(), course.getCode());
+		
+		for (Course equivalent : course.getEquivalencies()) {
+			if (!plan.hasCourse(equivalent.getCode())) {
+				html += String.format("<option value=\"%s\">%s</option>", equivalent.getCode(), equivalent.getCode());
+			}
+		}
+
+		html += "</select><br/><input type=\"submit\" value=\"Replace\"></form></div>";
+		return html;
 	}
 }

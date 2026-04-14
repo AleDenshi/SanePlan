@@ -39,14 +39,7 @@ ol, ul {
   z-index: 0;
 }
 
-.courseedit {
-	display: inline-block;
-	margin: 0.5em;
-	padding: 0.25em;
-	border: 1px solid black;
-}
-
-.planedit {
+.planedit, .courseedit, .useredit {
 	display: inline-block;
 	margin: 0.5em;
 	padding: 0.25em;
@@ -71,7 +64,8 @@ ol, ul {
 .column {
 	display: flex;
 	flex-direction: column-reverse;
-  background: grey;
+	min-width: 0em;
+	background: grey;
   padding: 10px;
   min-height: 200px;
   width: 6.5em;
@@ -116,6 +110,11 @@ ol, ul {
 
 .course[data-type="SPRINGONLY"] {
 	background-color: pink;
+}
+
+.course[data-type="META"] {
+	font-size: 0.75em;
+	background-color: darkgray;
 }
 
 .course:active {

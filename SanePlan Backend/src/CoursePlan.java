@@ -79,6 +79,23 @@ public class CoursePlan {
 		}
 		return null;
 	}
+	
+	/**
+	 * Finds and replaces the victim course with a new course
+	 * @param victimCode
+	 * @param course
+	 * @return
+	 */
+	public Course replaceCourseByCodes(String victimCode, Course course) {
+		if (findSemesterIndexByCourseCode(course.getCode()) == -1) {
+			Semester semester = findSemesterByCourseCode(victimCode);
+			if (semester != null) {
+				semester.addCourse(course);
+				return semester.removeCourseByCode(victimCode);
+			}
+		}
+		return null;
+	}
 
 	public void determineValidity() {
 		// Begin by assuming all is well
@@ -93,6 +110,7 @@ public class CoursePlan {
 			Semester semester = semesters.get(i);
 			ArrayList<Course> semesterCourses = semester.getSemesterCourses();
 			for (Course course : semesterCourses) {
+				if (course instanceof MetaCourse) continue; // TODO would this ever need to be changed?
 				if (!course.isType(semester.getType())) {
 					this.isValid &= false;
 					this.validityIssues
@@ -101,6 +119,15 @@ public class CoursePlan {
 				validateReqs(i, course);
 			}
 		}
+	}
+	
+	/**
+	 * Returns whether or not a plan contains a certain course
+	 * @param code
+	 * @return
+	 */
+	public boolean hasCourse(String code) {
+		return findSemesterIndexByCourseCode(code) != -1;
 	}
 
 	/**
