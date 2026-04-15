@@ -14,6 +14,7 @@ import java.nio.file.*;
 public class WebServer {
 
 	private HttpServer server;
+	
 	private ArrayList<User> users;
 	private Map<String, String> sessionTokens;
 	private Catalog catalog;
@@ -58,6 +59,7 @@ public class WebServer {
 		server.createContext("/addCourse", this::handleAddCourse);
 		server.createContext("/deleteCourse", this::handleDeleteCourse);
 		server.createContext("/editMetaCourse", this::handleEditMetaCourse);
+		// TODO Add user settings
 	}
 
 	public void start() {
@@ -353,6 +355,8 @@ public class WebServer {
 		if (user.isAdmin()) {
 			body += addUserAsHTML();
 			body += deleteUserAsHTML();
+			body += addCourseAsHTML();
+			body += deleteCourseAsHTML();
 		}
 
 		String response = (new HTMLPage("Dashboard", body)).toString();
@@ -375,7 +379,7 @@ public class WebServer {
 		String[] parts = path.split("/");
 		String body;
 		CoursePlan plan;
-		
+
 		if (parts.length >= 3 && !parts[2].isEmpty()) {
 			String name = parts[2];
 			plan = user.findPlanByName(name);
@@ -520,7 +524,50 @@ public class WebServer {
 	}
 
 	private void handleAddCourse(HttpExchange exchange) throws IOException {
-		// TODO Write this!
+		verifyPost(exchange);
+		authenticateAdmin(exchange);
+		Map<String, String> formData = getFormData(exchange);
+
+		String courseCode = formData.get("courseCode");
+		int courseCredits = Integer.parseInt(formData.get("courseCredits"));
+		String courseName = formData.get("courseName");
+		String courseDescription = formData.get("courseDescription");
+
+		String availability = "";
+		if (formData.containsKey("FALL")) {
+			availability += "FALL, ";
+		}
+		if (formData.containsKey("SPRING")) {
+			availability += "SPRING, ";
+		}
+		if (formData.containsKey("SUMMER")) {
+			availability += "SUMMER";
+		}
+
+		String line = String.format("%s\t%d\t%s\t%s\t", courseCode, courseCredits, courseName, courseDescription, availability);
+
+		for (int i = 1; i < 4; i++) {
+			if (formData.containsKey("preRequisites"+i)) {
+				line += "\t" + formData.get("preRequisites"+i);
+			} else {
+				line += "\t";
+			}
+		}
+		
+		for (int i = 1; i < 3; i++) {
+			if (formData.containsKey("coRequisites"+i)) {
+				line += "\t" + formData.get("coRequisites"+i);
+			} else {
+				line += "\t";
+			}
+		}
+
+		String values[] = line.split("\t");
+		Course newCourse = catalog.makeCourseFromValues(values);
+		catalog.addCourse(newCourse);
+		catalog.buildRequisitesFromValues(values);
+		System.out.println("Done adding " + newCourse);
+		sendBackToPreviousPage(exchange);
 	}
 
 	private void handleDeleteCourse(HttpExchange exchange) throws IOException {
@@ -556,10 +603,13 @@ public class WebServer {
 		Course course = catalog.findCourseByCode(code);
 
 		if (course == null || plan == null) {
+			// TODO Send the user a message about this
 			System.out.println("Could not find plan or course.");
 		} else if (plan.findSemesterIndexByCourseCode(code) != -1) {
+			// TODO Send the user a message about this
 			System.out.println(code + " is already present in " + planName);
 		} else {
+			// TODO Send the user a message about this
 			System.out.println("Adding " + code + " to " + planName);
 			plan.getSemesters().get(0).addCourse(course);
 		}
@@ -594,7 +644,7 @@ public class WebServer {
 		}
 		sendBackToPreviousPage(exchange);
 	}
-	
+
 	private void handleEditMetaCourse(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
@@ -610,9 +660,9 @@ public class WebServer {
 		} else {
 			code = formData.get("code");
 		}
-		
+
 		Course course = catalog.findCourseByCode(code);
-		
+
 		CoursePlan plan = user.findPlanByName(planName);
 		if (plan == null) {
 			// TODO we should print out an error to the user
@@ -666,7 +716,44 @@ public class WebServer {
 	}
 
 	private String addCourseAsHTML() {
-		return "";
+		String html = """
+				<form class="courseedit" method="POST" action="/addCourse">
+				<p>Add a Course</p>
+				<label>Course Code:</label>
+				<input type="text" name="courseCode"><br/>
+				<label>Course Credits:</label>
+				<input type="number" name="courseCredits"><br/>
+				<label>Course Name:</label>
+				<input type="text" name="courseName"><br/>
+				<label>Course Description:</label>
+				<input type="textbox" name="courseName"><br/>
+				
+				<label for="courseAvailability">Course availability:</label><br/>
+				<input type="checkbox" id="FALL" value="yes">
+				<label>Fall</label><br/>
+				<input type="checkbox" id="SPRING" value="yes">
+				<label>Spring</label><br/>
+				<input type="checkbox" id="SUMMER" value="yes">
+				<label>Summer</label><br/>
+
+				<p>Requisites should be entered as follows:
+				<code>CS 223;EGR 115</code> (meaning either CS 223 or EGR 115)
+				</p>
+				<label>Pre-Requisite Group 1:</label>
+				<input type="text" name="preRequisites1"><br/>
+				<label>Pre-Requisite Group 2:</label>
+				<input type="text" name="preRequisites2"><br/>
+				<label>Pre-Requisite Group 3:</label>
+				<input type="text" name="preRequisites3"><br/>
+
+				<label>Co-Requisite Group 1:</label>
+				<input type="text" name="coRequisites1"><br/>
+				<label>Co-Requisite Group 2:</label>
+				<input type="text" name="coRequisites2"><br/>
+				<input type="submit" value="Create New Course">
+				</form>
+				""";
+		return html;
 	}
 
 	private String deleteCourseAsHTML() {
@@ -680,7 +767,7 @@ public class WebServer {
 			html += String.format("<option value=\"%s\">%s</option>", course.getCode(), course.getCode());
 		}
 
-		html += "<br/><input type=\"submit\" value=\"Delete Course\"></form>";
+		html += "</select><br/><input type=\"submit\" value=\"Delete Course\"></form>";
 		return html;
 	}
 
@@ -718,16 +805,11 @@ public class WebServer {
 	}
 
 	private String addPlanAsHTML() {
+		// TODO make this a """ string
+		// TODO Make the degree code field a list of all degrees
 		String html = "<form class=\"planedit\" method=\"POST\" action=\"/addPlan\">\n"
 				+ "<label>Plan Name:</label><br>\n" + "<input type=\"text\" name=\"planName\"><br>\n"
-				+ "<label>Degree Code (optional):</label><br>\n" + "<input type=\"text\" name=\"degreeCode\"><br>\n" // TODO
-																														// Make
-																														// this
-																														// a
-																														// list
-																														// of
-																														// all
-																														// degrees!
+				+ "<label>Degree Code (optional):</label><br>\n" + "<input type=\"text\" name=\"degreeCode\"><br>\n"
 				+ "<label>Number of Semesters:</label><br>\n" + "<input type=\"number\" name=\"numSemesters\"><br>\n"
 				+ "<input type=\"checkbox\" id=\"summer\" name=\"summer\" value=\"yes\">\n"
 				+ "<label for=\"summer\">Include Summer Semesters</label><br>\n"
@@ -844,6 +926,7 @@ public class WebServer {
 
 	/**
 	 * Special method for generating meta courses
+	 * 
 	 * @param course
 	 * @param planName
 	 * @return
@@ -861,7 +944,7 @@ public class WebServer {
 				""";
 		String html = String.format(template, course.getCode(), course.getCredits() * 40, course.getCredits(),
 				course.getCode(), course.getName(), course.getCredits(), plan.getName(), course.getCode());
-		
+
 		for (Course equivalent : course.getEquivalencies()) {
 			if (!plan.hasCourse(equivalent.getCode())) {
 				html += String.format("<option value=\"%s\">%s</option>", equivalent.getCode(), equivalent.getCode());

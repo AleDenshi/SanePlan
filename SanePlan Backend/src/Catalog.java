@@ -22,6 +22,16 @@ public class Catalog {
 		readCoursesFromTSV(filename);
 		buildRequisitesFromTSV(filename);
 	}
+	
+	public Catalog(ArrayList<Course> courses) {
+		this.courses = courses;
+	}
+	
+	public void addCourse(Course course) {
+		if (!courses.contains(course)) {
+			courses.add(course);
+		}
+	}
 
 	/**
 	 * Get the list of all Courses in the catalog.
@@ -229,6 +239,14 @@ public class Catalog {
 	 * @return
 	 */
 	public ArrayList<Course> equivalentCoursesFromString(String equivalencyString) {
+		// If the course already exists, just return that
+		Course existingCourse = findCourseByCode(equivalencyString);
+		if (existingCourse != null) {
+			ArrayList<Course> equivalents = new ArrayList<Course>();
+			equivalents.add(existingCourse);
+			return equivalents;
+		}
+		
 		String[] courseValues = equivalencyString.split(":");
 		if (courseValues.length > 1) {
 
@@ -330,6 +348,7 @@ public class Catalog {
 		} catch (Exception e) {
 			System.out.println("Error detected when reading courses from TSV:");
 			e.printStackTrace();
+			System.exit(-1);
 		}
 	}
 
@@ -368,7 +387,7 @@ public class Catalog {
 	 * 
 	 * @param values - A String array of values corresponding to a course.
 	 */
-	private void buildRequisitesFromValues(String[] values) {
+	public void buildRequisitesFromValues(String[] values) {
 		// If the line is cutoff, build no requisites.
 		if (values.length < 5)
 			return;
@@ -407,12 +426,11 @@ public class Catalog {
 			Course courseRequisite = findCourseByCode(courseCode);
 			// If this is a blank entry, return null to indicate to skip this
 			if (courseRequisite == null) {
-				System.out.println("[WARN] Couldn't find " + courseCode);
 				if (courseCode.contains(":")) {
 					requisiteSet.addAll(equivalentCoursesFromString(courseCode));
 					System.out.println("[INFO] Built " + courseCode);
 				} else {
-					System.out.println("[WARN] Couldn't build " + courseCode);
+					System.out.println("[WARN] Couldn't find/build " + courseCode);
 					return null;
 				}
 			} else {
@@ -432,7 +450,7 @@ public class Catalog {
 	 *               object oriented programming...)<br>
 	 * @return A Course created from the values.
 	 */
-	private Course makeCourseFromValues(String[] values) {
+	public Course makeCourseFromValues(String[] values) {
 		int credits = Integer.parseInt(values[1]);
 		ArrayList<SemesterType> availability;
 		if (values.length > 4) {
@@ -486,7 +504,7 @@ public class Catalog {
 		return null;
 	}
 
-	// TODO REMOVE THIS FILE IO JUNK
+	// TODO Remove this once testing is completed
 	public CoursePlan loadCoursePlanFromFile(String filename) {
 		String jsonContent;
 		try {
@@ -506,27 +524,7 @@ public class Catalog {
 	 * @param filename - The filename of a TSV file containing degree information.
 	 */
 	public Degree readDegreeFromTSV(String filename) {
-		File file = new File(filename);
-		Degree d = null;
-		try {
-			Scanner scan = new Scanner(file);
-			scan.nextLine();
-			while (scan.hasNextLine()) {
-				String line = scan.nextLine();
-				String[] values = line.split("	");
-
-				// If the file has a gap in it, skip
-				if (values.length < 3)
-					break;
-
-			}
-			// Done scanning from file
-			scan.close();
-		} catch (Exception e) {
-			System.out.println("Error detected when reading degree from TSV:");
-			e.printStackTrace();
-		}
-		return d;
+		// TODO Write this method.
+		return null;
 	}
-
 }

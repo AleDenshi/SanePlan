@@ -2,28 +2,184 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.IOException;
 
 public class Database {
-	Connection connection;
-	// Cache to speed up course loading
-	Map<String, Course> courseCache = new HashMap<>();
+	Connection conn;
 
+	/**
+	 * Construct the database.
+	 */
 	public Database() {
 		// TODO Add authentication configuration file instead of in-place creds!
-		this.connection = connectToDB("SanePlan", "postgres", "");
+		// this.connection = connectToDB("SanePlan", "postgres", "");
+		this.conn = connectToSqlite("saneplan.sql");
+
 		// TODO Add other database SQL files
-		buildDatabaseFromFile("Catalog.sql");
+		buildDatabaseFromFile("catalog.sql");
+	}
+
+	// TODO Remove this once done testing.
+	public static void main(String[] args) {
+		Database db = new Database();
+		Catalog catalog = new Catalog("courses.tsv");
+
+		ArrayList<Course> courses = catalog.getCourses();
+		for (Course course : courses) {
+			db.addCourse(course);
+		}
 	}
 
 	/**
-	 * Connect to a PostgreSQL database when given credentials
+	 * Add a Course to the database.
+	 * 
+	 * @param course - A course object.
+	 * @return Whether or not the course was validly added to the database.
+	 */
+	public boolean addCourse(Course course) {
+		String insertCourseSQL = "INSERT INTO Courses (code, credits, name, description) VALUES (?, ?, ?, ?)";
+
+		try (PreparedStatement ps = conn.prepareStatement(insertCourseSQL)) {
+			ps.setString(1, course.getCode());
+			ps.setInt(2, course.getCredits());
+			ps.setString(3, course.getName());
+			ps.setString(4, course.getDescription());
+			ps.executeUpdate();
+		} catch (SQLException e) {
+			return false;
+		}
+		
+		if (!addAvailability(course))
+			return false;
+		
+		if (!addRequisites(course, "pre")) {
+			System.out.println("Some fatal error adding prerequisites");
+			return false;
+		}
+		if (!addRequisites(course, "co")) {
+			System.out.println("Some fatal error adding corequisites");
+			return false;
+		}
+		
+		return true;
+	}
+	
+	/**
+	 * Add availability to a course.
+	 * @param course
+	 * @return
+	 */
+	private boolean addAvailability(Course course) {
+		String insertAvailabilitySQL = "INSERT INTO Availability (code, semester) VALUES (?, ?)";
+		
+		for (SemesterType type : course.getAvailability()) {
+			try (PreparedStatement ps = conn.prepareStatement(insertAvailabilitySQL)) {
+				ps.setString(1, course.getCode());
+				ps.setString(2, type.toString());
+				ps.executeUpdate();
+			} catch (SQLException e) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Adds either pre or co-requisites to the database when given a Course.
+	 * @param course - The Course for which to add pre or co-requisites.
+	 * @param prefix
+	 * @return
+	 */
+	private boolean addRequisites(Course course, String prefix) {
+		ArrayList<ArrayList<Course>> requisiteGroups;
+		if (prefix.equals("co")) {
+			requisiteGroups = course.getCoRequisites();
+		} else if (prefix.equals("pre")) {
+			requisiteGroups = course.getPreRequisites();
+		} else {
+			return false;
+		}
+		
+		String insertRequisiteGroupsSQL = "INSERT INTO " + prefix + "RequisiteGroups (parentCode, groupID) VALUES (?, ?)";
+		String insertRequisiteSQL = "INSERT INTO " + prefix + "RequisiteGroups (groupID, requisiteCode) VALUES (?, ?)";
+		
+		for (ArrayList<Course> requisiteGroup : requisiteGroups) {
+			int groupID = nextGroupID(prefix + "RequisiteGroups");
+			try (PreparedStatement ps = conn.prepareStatement(insertRequisiteGroupsSQL)) {
+				ps.setString(1, course.getCode());
+				ps.setInt(2, groupID);
+				ps.executeUpdate();
+				
+				for (Course requisite : requisiteGroup) {
+					try (PreparedStatement ps2 = conn.prepareStatement(insertRequisiteSQL)) {
+						ps2.setInt(1, groupID);
+						ps2.setString(2, requisite.getCode());
+					} catch (SQLException e) {
+						return false;
+					}
+				}
+				
+			} catch (SQLException e) {
+				return false;
+			}
+		}
+		
+		return true;
+	}
+	
+	/**
+	 * Determine the next groupID to use based on the maximum value present in the given table + 1.
+	 * @param table - The name of the table to find this for. Eg. preRequisiteGroups
+	 * @return
+	 */
+	private int nextGroupID(String table) {
+        String selectStatement = "SELECT MAX(groupID) FROM " + table;
+
+        try {
+        	Statement stmt = conn.createStatement();
+        	ResultSet rs = stmt.executeQuery(selectStatement);
+
+            if (rs.next()) {
+                int max = rs.getInt(1);
+
+                if (rs.wasNull()) {
+                    return 0;
+                }
+                return max;
+            }
+        } catch (SQLException e) {
+        	e.printStackTrace();
+        	System.exit(-1);
+        }
+
+        return 0;
+	}
+
+	/**
+	 * Connect to an SQLite file database. FOR TESTING PURPOSES ONLY. DO NOT USE IN
+	 * PRODUCTION.
+	 * 
+	 * @param filename - The filename of the database.
+	 * @return
+	 */
+	private Connection connectToSqlite(String filename) {
+		try {
+			return DriverManager.getConnection("jdbc:sqlite:" + filename);
+		} catch (Exception e) {
+			System.out.println("Error when trying to connecting to database " + filename);
+			e.printStackTrace();
+			System.exit(-1);
+		}
+		return null;
+	}
+
+	/**
+	 * Connect to a PostgreSQL database.
 	 * 
 	 * @param dbName   - The name of the database, eg. SanePlan
 	 * @param username - The username used to access the database
@@ -39,6 +195,7 @@ public class Database {
 				System.out.println("Connection established.");
 			} else {
 				System.out.println("Failed to connect to database " + dbName);
+				System.exit(-1);
 			}
 		} catch (Exception e) {
 			System.out.println(e.getMessage());
@@ -71,8 +228,7 @@ public class Database {
 	 */
 	private void buildDatabaseFromFile(String filename) {
 		String[] sqlStatements = getStatementsFromSqlFile(filename);
-		try {
-			Statement stmt = connection.createStatement();
+		try (Statement stmt = conn.createStatement()) {
 
 			for (String statement : sqlStatements) {
 				statement = statement.trim();
@@ -84,225 +240,5 @@ public class Database {
 			e.printStackTrace();
 			System.exit(-1);
 		}
-	}
-
-	/**
-	 * Adds a course to the database. This does NOT add the prerequisites,
-	 * corequisites or availability (FALL, SPRING etc...)
-	 * 
-	 * @param course - A Course type.
-	 */
-	public void addCourseInfo(Course course) {
-		try {
-			PreparedStatement insertStatement;
-			insertStatement = connection
-					.prepareStatement("INSERT INTO Courses VALUES (?, ?, ?, ?) ON CONFLICT (courseCode) DO NOTHING;");
-			insertStatement.setString(1, course.getCode());
-			insertStatement.setString(2, course.getName());
-			insertStatement.setInt(3, course.getCredits());
-			insertStatement.setString(4, course.getDescription());
-			insertStatement.execute();
-
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.exit(-1);
-		}
-		courseCache.put(course.getCode(), course);
-	}
-
-	/**
-	 * Returns all requisite groups for a given type (co or pre) for a course.
-	 * 
-	 * @param courseCode
-	 * @return
-	 */
-	public ArrayList<ArrayList<Course>> getRequisiteGroupsFromCourseCode(String courseCode, String type) {
-		ArrayList<ArrayList<Course>> requisiteGroups = new ArrayList<ArrayList<Course>>();
-		if (type.equals("co") || type.equals("pre")) {
-			try {
-				// Get all existing groupIDs
-				PreparedStatement query;
-				query = connection.prepareStatement(
-						"SELECT groupID FROM " + type + "RequisiteGroups WHERE courseCode = ?");
-				query.setString(1, courseCode);
-				ResultSet rs = query.executeQuery();
-				
-				while (rs.next()) {
-					int groupID = rs.getInt("groupID");
-					//System.out.printf("%s has %s-requisite groupID = %d\n", courseCode, type, groupID);
-					ArrayList<Course> requisites = getRequisiteListFromGroupID(groupID, type);
-					requisiteGroups.add(requisites);
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(-1);
-			}
-		}
-		return requisiteGroups;
-	}
-	
-	/**
-	 * Return a list of requisites (either pre or co) from the groupID in the database.
-	 * @param groupID
-	 * @param type
-	 * @return An ArrayList of Courses representing requisites.
-	 */
-	public ArrayList<Course> getRequisiteListFromGroupID(int groupID, String type) {
-		ArrayList<Course> requisites = new ArrayList<Course>();
-		if (type.equals("co") || type.equals("pre")) {
-			try {
-				// Get all existing groupIDs
-				PreparedStatement query;
-				query = connection.prepareStatement(
-						"SELECT requisiteCode FROM " + type + "Requisites WHERE groupID = ?");
-				query.setInt(1, groupID);
-				ResultSet rs = query.executeQuery();
-				
-				while (rs.next()) {
-					Course course = getCourseFromCode(rs.getString("requisiteCode"));
-					requisites.add(course);
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(-1);
-			}
-		}
-		
-		if (requisites.size() == 0) {
-			return null;
-		}
-		return requisites;
-	}
-	
-	public void addRequisiteGroupToCourse(String courseCode, ArrayList<Course> requisiteGroup, String type) {
-		if (type.equals("co") || type.equals("pre")) {
-			
-			// Before adding a new requisite, check if there already exists an equivalent group in the database
-			ArrayList<ArrayList<Course>> requisiteGroups = getRequisiteGroupsFromCourseCode(courseCode, type);
-			for (ArrayList<Course> originalRequisiteGroup : requisiteGroups) {
-				if (requisiteGroup.equals(originalRequisiteGroup)) {
-					System.out.println("Duplicate group found for " + courseCode);
-					return;
-				}
-			}
-			
-			int groupID = -1;
-			try {
-				// Create a new group in the database
-				PreparedStatement insertStatement;
-				insertStatement = connection.prepareStatement(
-						"INSERT INTO " + type + "RequisiteGroups (courseCode) VALUES (?) RETURNING groupID");
-				insertStatement.setString(1, courseCode);
-				// Obtain the groupID we just created for inserting the individual courses
-				ResultSet rs = insertStatement.executeQuery();
-				if (rs.next()) {
-					groupID = rs.getInt("groupID");
-				} else {
-					System.out.println("Creating preRequisiteGroup failed, no ID obtained.");
-					System.exit(-1);
-				}
-
-				// Go through all the requisite and add them to the database
-				for (Course requisite : requisiteGroup) {
-					insertStatement = connection
-							.prepareStatement("INSERT INTO " + type + "Requisites (groupID, requisiteCode) VALUES (?, ?);");
-					insertStatement.setInt(1, groupID);
-					insertStatement.setString(2, requisite.getCode());
-					insertStatement.executeUpdate();
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(-1);
-			}
-		} else {
-			System.out.println("Invalid requisite type: " + type);
-		}
-	}
-
-	/**
-	 * Returns a Course from the database, if it exists, given the course code (eg.
-	 * CS 225).
-	 * 
-	 * @param courseCode - The course code for the desired course.
-	 * @return A Course object.
-	 */
-	public Course getCourseFromCode(String courseCode) {
-		if (courseCache.containsKey(courseCode)) {
-	        return courseCache.get(courseCode);
-	    }
-		
-		try {
-			PreparedStatement queryStatement;
-			queryStatement = connection.prepareStatement("SELECT * FROM Courses WHERE courseCode = ?");
-			queryStatement.setString(1, courseCode);
-			ResultSet info = queryStatement.executeQuery();
-			// TODO Change the name of the availableSemesters table to be consistent?
-			queryStatement = connection
-					.prepareStatement("SELECT semester FROM availableSemesters WHERE courseCode = ?");
-			queryStatement.setString(1, courseCode);
-			ResultSet availability = queryStatement.executeQuery();
-			Course course = resultSetToCourse(info, availability);
-			
-			// Now obtain the pre and co requisites
-			ArrayList<ArrayList<Course>> preRequisites = getRequisiteGroupsFromCourseCode(courseCode, "pre");
-			ArrayList<ArrayList<Course>> coRequisites = getRequisiteGroupsFromCourseCode(courseCode, "co");
-			course.setPreRequisites(preRequisites);
-			course.setCoRequisites(coRequisites);
-			return course;
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.exit(-1);
-		}
-		return null;
-	}
-
-	/**
-	 * Creates a course given the results of two queries.
-	 *
-	 * @param info         - The ResultSet of a query on the information of the
-	 *                     course from the Courses table.
-	 * @param availability - The resultSet of a query on the availability of the
-	 *                     course from the Availability table.
-	 * @return A Course object or null if the conversion fails.
-	 */
-	private Course resultSetToCourse(ResultSet info, ResultSet availability) {
-		ArrayList<SemesterType> availabilityList = new ArrayList<SemesterType>();
-		try {
-			while (availability.next()) {
-				String semesterString = availability.getString("semester");
-				availabilityList.add(SemesterType.valueOf(semesterString));
-			}
-			if (info.next()) {
-				Course course = new Course(info.getString("courseCode"), info.getInt("credits"),
-						info.getString("courseName"), info.getString("courseDescription"), availabilityList);
-				return course;
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.exit(-1);
-		}
-		return null;
-	}
-
-	public void addRequisitesFromCourse(Course course) {
-		for (ArrayList<Course> requisiteGroup : course.getCoRequisites()) {
-			addRequisiteGroupToCourse(course.getCode(), requisiteGroup, "co");
-		}
-
-		for (ArrayList<Course> requisiteGroup : course.getPreRequisites()) {
-			addRequisiteGroupToCourse(course.getCode(), requisiteGroup, "pre");
-		}
-	}
-
-	public void addCatalog(Catalog catalog) {
-		ArrayList<Course> courses = catalog.getCourses();
-		// Do an initial run adding all the basic course info
-		for (Course course : courses) {
-			addCourseInfo(course);
-		}
-		for (Course course : courses) {
-			addRequisitesFromCourse(course);
-		}
-		System.out.println("Added " + courses.size() + " courses to the database.");
 	}
 }

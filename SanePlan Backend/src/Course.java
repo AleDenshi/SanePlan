@@ -103,6 +103,10 @@ public class Course {
 	public String getDescription() {
 		return description;
 	}
+	
+	public ArrayList<SemesterType> getAvailability() {
+		return availability;
+	}
 
 	public ArrayList<ArrayList<Course>> getPreRequisites() {
 		return preRequisites;

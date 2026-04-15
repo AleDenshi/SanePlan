@@ -42,7 +42,8 @@ ol, ul {
 .planedit, .courseedit, .useredit {
 	display: inline-block;
 	margin: 0.5em;
-	padding: 0.25em;
+	text-align: left;
+	padding: 0.5em;
 	border: 1px solid black;
 }
 

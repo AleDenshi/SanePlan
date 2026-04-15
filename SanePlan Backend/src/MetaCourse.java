@@ -33,7 +33,7 @@ public class MetaCourse extends Course {
 	
 	public Course findEquivalencyByCode(String courseCode) {
 		for (Course course : equivalencies) {
-			if (course.equals(courseCode)) {
+			if (course.getCode().equals(courseCode)) {
 				return course;
 			}
 		}
