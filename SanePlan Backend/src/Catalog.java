@@ -248,6 +248,7 @@ public class Catalog {
 						semester.addCourse(courseToAdd);
 						// If this isn't a singleton course, we must build a meta course
 					} else {
+
 						String metaName = "";
 						ArrayList<Course> equivalencies = new ArrayList<Course>();
 						// Go through all ORed courses (eg. HU:3:LL/SS:3:LL)
@@ -637,8 +638,7 @@ public class Catalog {
 			System.out.println("[WARN] " + plan.getName() + " has no degree.");
 			return null;
 		}
-		
-		System.out.println("Hey what's up");
+
 		ArrayList<String> degreeIssues = new ArrayList<String>();
 		ArrayList<Course> courses = plan.getFlattenedCourseList();
 		
@@ -652,7 +652,7 @@ public class Catalog {
 				}
 			}
 			if (metCourse == null) {
-				degreeIssues.add("Could not find " + requirement.getEquivalentCourses() + " in set " + courses);
+				degreeIssues.add(requirement.getName() + " requirement not met: could not find " + requirement.getEquivalentCourses());
 			}
 		}
 		return degreeIssues;
