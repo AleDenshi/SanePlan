@@ -3,6 +3,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 
 import org.json.JSONArray;
@@ -11,6 +12,16 @@ import org.json.JSONObject;
 public class Catalog {
 
 	private ArrayList<Course> courses;
+	private HashMap<String, ArrayList<String>> codeEquivalencies;
+	private ArrayList<Degree> degrees;
+	
+	public Degree getDegreeByCode(String code) {
+		for (Degree degree : degrees) {
+			if (degree.getCode().equals(code))
+				return degree;
+		}
+		return null;
+	}
 
 	/**
 	 * Constructs a Catalog object from a given file.
@@ -19,14 +30,64 @@ public class Catalog {
 	 */
 	public Catalog(String filename) {
 		this.courses = new ArrayList<Course>();
+		this.degrees = new ArrayList<Degree>();
+		this.codeEquivalencies = readCodeEquivalenciesFromTSV("equivalents.tsv");
 		readCoursesFromTSV(filename);
 		buildRequisitesFromTSV(filename);
+
 	}
-	
+
+	/**
+	 * Returns an ArrayList of equivalent codes when given a code (eg. HU --> HU,
+	 * GCS, HSI...).
+	 * 
+	 * @param code - The master code to query for.
+	 * @return
+	 */
+	public ArrayList<String> getEquivalentCodes(String code) {
+		if (codeEquivalencies.containsKey(code)) {
+			return codeEquivalencies.get(code);
+		} else {
+			ArrayList<String> equivalentCodes = new ArrayList<String>();
+			equivalentCodes.add(code);
+			return equivalentCodes;
+		}
+	}
+
+	private HashMap<String, ArrayList<String>> readCodeEquivalenciesFromTSV(String filename) {
+		HashMap<String, ArrayList<String>> readEquivalencies = new HashMap<String, ArrayList<String>>();
+		File file = new File(filename);
+
+		try {
+			Scanner scan = new Scanner(file);
+
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				String[] values = line.split("	");
+
+				String keyCode = values[0];
+				ArrayList<String> equivalentCodes = new ArrayList<String>();
+				for (int i = 1; i < values.length; i++) {
+					equivalentCodes.add(values[i]);
+				}
+
+				readEquivalencies.put(keyCode, equivalentCodes);
+			}
+			// Done scanning from file
+			scan.close();
+		} catch (Exception e) {
+			System.out.println("Error detected when reading code equivalencies from TSV:");
+			e.printStackTrace();
+			System.exit(-1);
+		}
+		return readEquivalencies;
+
+	}
+
 	public Catalog(ArrayList<Course> courses) {
 		this.courses = courses;
 	}
-	
+
 	public void addCourse(Course course) {
 		if (!courses.contains(course)) {
 			courses.add(course);
@@ -161,6 +222,10 @@ public class Catalog {
 
 		try {
 			Scanner scan = new Scanner(file);
+			// Get the degree first
+			Degree degree = getDegreeByCode(scan.nextLine());
+			plan.setDegree(degree);
+			
 			while (scan.hasNextLine()) {
 				String line = scan.nextLine();
 				String[] values = line.split("	");
@@ -194,9 +259,9 @@ public class Catalog {
 							if (j != codes.length - 1) {
 								metaName += " or ";
 							}
-							
+
 							ArrayList<Course> newEquivalencies = equivalentCoursesFromString(code);
-							
+
 							if (newEquivalencies != null) {
 								equivalencies.addAll(newEquivalencies);
 							} else {
@@ -239,15 +304,18 @@ public class Catalog {
 	 * @return
 	 */
 	public ArrayList<Course> equivalentCoursesFromString(String equivalencyString) {
+		ArrayList<Course> equivalents = new ArrayList<Course>();
 		// If the course already exists, just return that
-		Course existingCourse = findCourseByCode(equivalencyString);
-		if (existingCourse != null) {
-			ArrayList<Course> equivalents = new ArrayList<Course>();
-			equivalents.add(existingCourse);
-			return equivalents;
+		if (!equivalencyString.contains(":")) {
+			Course existingCourse = findCourseByCode(equivalencyString);
+			if (existingCourse != null) {
+				equivalents.add(existingCourse);
+				return equivalents;
+			}
 		}
-		
-		String[] courseValues = equivalencyString.split(":");
+
+		String[] acceptDeny = equivalencyString.split("-");
+		String[] courseValues = acceptDeny[0].split(":");
 		if (courseValues.length > 1) {
 
 			String category = courseValues[0];
@@ -283,9 +351,9 @@ public class Catalog {
 				maxLevel = Integer.parseInt(max);
 				break;
 			}
-			return getEquivalent(category, requiredCredits, minLevel, maxLevel);
+			equivalents = getEquivalent(category, requiredCredits, minLevel, maxLevel);
 		}
-		return null;
+		return equivalents;
 
 	}
 
@@ -301,17 +369,21 @@ public class Catalog {
 	private ArrayList<Course> getEquivalent(String category, int requiredCredits, int minLevel, int maxLevel) {
 		ArrayList<Course> equivalencies = new ArrayList<Course>();
 		boolean elective = category.contains("ELECT");
-		
+
 		for (Course equivalent : courses) {
-			if (equivalent instanceof MetaCourse) continue;
+			if (equivalent instanceof MetaCourse)
+				continue;
 			String[] codeValues = equivalent.getCode().split(" ");
 			String thisCategory = codeValues[0];
 			int thisLevel = Integer.parseInt(codeValues[1].replaceAll("[^0-9]", ""));
-			
+
 			if (thisLevel >= minLevel && thisLevel <= maxLevel && equivalent.getCredits() == requiredCredits) {
-				// TODO This elective system assumes all courses are acceptable. Is that actually OK?
-				if (thisCategory.equals(category) || elective) {
-					equivalencies.add(equivalent);
+				// TODO This elective system assumes all courses are acceptable. Is that
+				// actually OK?
+				for (String individualCategory : getEquivalentCodes(category)) {
+					if (thisCategory.equals(individualCategory) || elective) {
+						equivalencies.add(equivalent);
+					}
 				}
 			}
 		}
@@ -422,7 +494,7 @@ public class Catalog {
 		for (String courseCode : courseCodes) {
 			if (courseCode.isEmpty())
 				continue;
-			
+
 			Course courseRequisite = findCourseByCode(courseCode);
 			// If this is a blank entry, return null to indicate to skip this
 			if (courseRequisite == null) {
@@ -518,13 +590,111 @@ public class Catalog {
 		return null;
 	}
 
+	// TODO actually check if the degree exists first
+	public void addDegree(String filename) {
+		Degree degree = readDegreeFromTSV(filename);
+		degrees.add(degree);
+	}
+
+	public ArrayList<Course> getAllEquivalentCourses(String courseToDecode) {
+		ArrayList<Course> equivalentCourses = new ArrayList<Course>();
+		for (String toDecode : courseToDecode.split("/")) {
+			equivalentCourses.addAll(equivalentCoursesFromString(toDecode));
+		}
+
+		return equivalentCourses;
+	}
+
+	/**
+	 * Determine if a Course meets the requirements.
+	 * @param requirement
+	 * @param course
+	 * @return
+	 */
+	public boolean requirementMetBy(DegreeRequirement requirement, Course course) {
+		if (course.getCode().contains(":") || course.getCode().contains("/")) {
+			ArrayList<Course> equivalentCourses = getAllEquivalentCourses(course.getCode());
+			ArrayList<Course> supersetCourses = requirement.getEquivalentCourses();
+			
+			for (Course equivalent : equivalentCourses) {
+				if (!supersetCourses.contains(equivalent)) {
+					return false;
+				}
+			}
+			return true;
+		} else {
+			return requirement.getEquivalentCourses().contains(course);
+		}
+	}
+
+	/**
+	 * Determine is a plan has met its degree requirements.
+	 * @param plan - The CoursePlan being analyzed.
+	 * @return An ArrayList of Strings containing issues with the plan.
+	 */
+	public ArrayList<String> determineIfMeetsDegree(CoursePlan plan) {
+		if (plan.getDegree() == null) {
+			System.out.println("[WARN] " + plan.getName() + " has no degree.");
+			return null;
+		}
+		
+		System.out.println("Hey what's up");
+		ArrayList<String> degreeIssues = new ArrayList<String>();
+		ArrayList<Course> courses = plan.getFlattenedCourseList();
+		
+		for (DegreeRequirement requirement : plan.getDegree().getRequirements()) {
+			Course metCourse = null;
+			for (Course course : courses) {
+				if (requirementMetBy(requirement, course)) {
+					metCourse = course;
+					courses.remove(course);
+					break;
+				}
+			}
+			if (metCourse == null) {
+				degreeIssues.add("Could not find " + requirement.getEquivalentCourses() + " in set " + courses);
+			}
+		}
+		return degreeIssues;
+	}
+
 	/**
 	 * Cycles through a TSV file and creates a degree and its requirements from it.
 	 * 
 	 * @param filename - The filename of a TSV file containing degree information.
 	 */
 	public Degree readDegreeFromTSV(String filename) {
-		// TODO Write this method.
-		return null;
+		File file = new File(filename);
+		Degree degree = null;
+		try {
+			Scanner scan = new Scanner(file);
+
+			String[] values = scan.nextLine().split("	");
+			String name = values[0];
+			String code = values[1];
+			String description = values[2];
+
+			degree = new Degree(name, code, description);
+			values = scan.nextLine().split("	");
+			int electives = Integer.parseInt(values[1]);
+
+			while (scan.hasNextLine()) {
+
+				String line = scan.nextLine();
+				values = line.split("	");
+				String requirementName = values[0];
+				DegreeRequirement requirement = new DegreeRequirement(requirementName);
+				ArrayList<Course> equivalentCourses = new ArrayList<Course>();
+				requirement.setEquivalentCourses(getAllEquivalentCourses(values[1]));
+				degree.addDegreeRequirement(requirement);
+			}
+
+			scan.close();
+		} catch (Exception e) {
+			System.out.println("Error detected when trying to build degree from TSV:");
+			e.printStackTrace();
+		}
+
+		return degree;
 	}
 }

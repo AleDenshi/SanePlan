@@ -8,5 +8,30 @@ public class Degree {
 		this.name = name;
 		this.code = code;
 		this.description = description;
+		this.requirements = new ArrayList<DegreeRequirement>();
+	}
+	
+	public void addDegreeRequirement(DegreeRequirement requirement) {
+		if (!requirements.contains(requirement))
+			requirements.add(requirement);
+	}
+	
+	public ArrayList<DegreeRequirement> getRequirements() {
+		return requirements;
+	}
+	
+	public String getCode() {
+		return this.code;
+	}
+	
+	@Override
+	public String toString() {
+		String value = "";
+		value += name + " (" + code + ")\n";
+		value += "Requirements:\n";
+		for (DegreeRequirement dr : requirements) {
+			value += dr + "\n";
+		}
+		return value;
 	}
 }

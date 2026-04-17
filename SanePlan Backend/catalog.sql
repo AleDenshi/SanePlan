@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS Availability (
 /* Pre-requisite information */
 CREATE TABLE IF NOT EXISTS preRequisiteGroups (
     parentCode VARCHAR(32) NOT NULL,
-    groupID INTEGER PRIMARY KEY,
+    groupID INTEGER,
     FOREIGN KEY (parentCode) REFERENCES Courses(code)
 );
 
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS preRequisites (
 /* Co-requisite information */
 CREATE TABLE IF NOT EXISTS coRequisiteGroups (
     parentCode VARCHAR(32) NOT NULL,
-    groupID INTEGER PRIMARY KEY,
+    groupID INTEGER,
     FOREIGN KEY (parentCode) REFERENCES Courses(code)
 );
 

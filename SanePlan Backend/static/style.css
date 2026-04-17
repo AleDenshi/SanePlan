@@ -97,7 +97,7 @@ ol, ul {
 	cursor: grab;
 	position: relative;
 	z-index: 2;
-	overflow: hidden;
+	overflow: scroll;
 }
 
 .course p {

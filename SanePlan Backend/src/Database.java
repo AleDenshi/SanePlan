@@ -7,6 +7,8 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.io.IOException;
 
 public class Database {
@@ -22,16 +24,106 @@ public class Database {
 
 		// TODO Add other database SQL files
 		buildDatabaseFromFile("catalog.sql");
+		buildDatabaseFromFile("users.sql");
 	}
-
-	// TODO Remove this once done testing.
-	public static void main(String[] args) {
-		Database db = new Database();
-		Catalog catalog = new Catalog("courses.tsv");
-
-		ArrayList<Course> courses = catalog.getCourses();
-		for (Course course : courses) {
-			db.addCourse(course);
+	
+	/**
+	 * Get a user from the database
+	 * @param username
+	 * @return
+	 */
+	public User getUser(String username) {
+		String getUserSQL = "SELECT username, passwordHash, isAdmin FROM Users WHERE LOWER(username) = LOWER(?)";
+		
+		try (PreparedStatement ps = conn.prepareStatement(getUserSQL)) {
+			ps.setString(1, username);
+			ResultSet rs = ps.executeQuery();
+			
+			if (rs.next()) {
+				String passwordHash = rs.getString("passwordHash");
+				boolean isAdmin = rs.getBoolean("isAdmin");
+				return new User(username, passwordHash, isAdmin);
+			}
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.exit(-1);
+		}
+		return null;
+	}
+	
+	/**
+	 * Add a user to the system.
+	 * @param username
+	 * @param password
+	 * @param isAdmin
+	 * @return - Returns the user just created, or null if there was some error in the creation of said user.
+	 */
+	public User addUser(String username, String password, boolean isAdmin) {
+		String insertUserSQL = "INSERT INTO Users (username, passwordHash, isAdmin) VALUES (?, ?, ?)";
+		
+		try (PreparedStatement ps = conn.prepareStatement(insertUserSQL)) {
+			ps.setString(1, username);
+			ps.setString(2, hashString(password));
+			ps.setBoolean(3, isAdmin);
+			ps.executeUpdate();
+			
+		} catch (SQLException e) {
+			return getUser(username);
+		}
+		return new User(username, password, isAdmin);
+	}
+	
+	/**
+	 * Set a new password for a user.
+	 * @param username
+	 * @param password
+	 */
+	public void changeUserPassword(String username, String password) {
+		String insertUserSQL = "UPDATE Users SET passwordHash = ? WHERE username = ?";
+		
+		try (PreparedStatement ps = conn.prepareStatement(insertUserSQL)) {
+			ps.setString(1, hashString(password));
+			ps.setString(2, username);
+			ps.executeUpdate();
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.exit(-1);
+		}
+	}
+	
+	/**
+	 * Give a user admin permissions.
+	 * @param username
+	 */
+	public void makeUserAdmin(String username) {
+		String insertUserSQL = "UPDATE Users SET isAdmin = TRUE WHERE username = ?";
+		
+		try (PreparedStatement ps = conn.prepareStatement(insertUserSQL)) {
+			ps.setString(1, username);
+			ps.executeUpdate();
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.exit(-1);
+		}
+	}
+	
+	/**
+	 * Remove a user's admin permissions.
+	 * @param username
+	 */
+	public void unmakeUserAdmin(String username) {
+		String insertUserSQL = "UPDATE Users SET isAdmin = FALSE WHERE username = ?";
+		
+		try (PreparedStatement ps = conn.prepareStatement(insertUserSQL)) {
+			ps.setString(1, username);
+			ps.executeUpdate();
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.exit(-1);
 		}
 	}
 
@@ -239,6 +331,33 @@ public class Database {
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(-1);
+		}
+	}
+
+	
+	/**
+	 * Convert a String into a SHA256 hash.
+	 * 
+	 * @param input - The String to be hashed.
+	 * @return - A hash corresponding to that String.
+	 */
+	private String hashString(String input) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] hashBytes = digest.digest(input.getBytes());
+
+			StringBuilder hexString = new StringBuilder();
+			for (byte b : hashBytes) {
+				String hex = Integer.toHexString(0xff & b);
+				if (hex.length() == 1)
+					hexString.append('0');
+				hexString.append(hex);
+			}
+
+			return hexString.toString();
+
+		} catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException("SHA-256 algorithm not found", e);
 		}
 	}
 }

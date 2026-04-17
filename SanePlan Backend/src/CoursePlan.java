@@ -6,13 +6,23 @@ public class CoursePlan {
 	private ArrayList<String> validityIssues;
 	private ArrayList<Semester> semesters;
 	private boolean isValid;
+	private Degree degree;
 
 	public boolean isValid() {
 		return this.isValid;
 	}
 
+	public void setDegree(Degree degree) {
+		this.degree = degree;
+	}
+	
+	public Degree getDegree() {
+		return this.degree;
+	}
+
 	/**
 	 * Construct a CoursePlan, given a name.
+	 * 
 	 * @param name - The name of the CoursePlan.
 	 */
 	public CoursePlan(String name) {
@@ -24,7 +34,7 @@ public class CoursePlan {
 	public String getName() {
 		return this.name;
 	}
-	
+
 	public ArrayList<Semester> getSemesters() {
 		return this.semesters;
 	}
@@ -51,9 +61,10 @@ public class CoursePlan {
 		}
 		return -1;
 	}
-	
+
 	/**
 	 * Returns a 1-dimensional list of all courses in the plan.
+	 * 
 	 * @return
 	 */
 	public ArrayList<Course> getFlattenedCourseList() {
@@ -65,9 +76,11 @@ public class CoursePlan {
 		}
 		return flatCourseList;
 	}
-	
+
 	/**
-	 * Removes a Course from the CoursePlan by code. Returns null if it is not found.
+	 * Removes a Course from the CoursePlan by code. Returns null if it is not
+	 * found.
+	 * 
 	 * @param code
 	 * @return
 	 */
@@ -79,9 +92,10 @@ public class CoursePlan {
 		}
 		return null;
 	}
-	
+
 	/**
 	 * Finds and replaces the victim course with a new course
+	 * 
 	 * @param victimCode
 	 * @param course
 	 * @return
@@ -110,7 +124,8 @@ public class CoursePlan {
 			Semester semester = semesters.get(i);
 			ArrayList<Course> semesterCourses = semester.getSemesterCourses();
 			for (Course course : semesterCourses) {
-				if (course instanceof MetaCourse) continue; // TODO would this ever need to be changed?
+				if (course instanceof MetaCourse)
+					continue; // TODO would this ever need to be changed?
 				if (!course.isType(semester.getType())) {
 					this.isValid &= false;
 					this.validityIssues
@@ -120,9 +135,10 @@ public class CoursePlan {
 			}
 		}
 	}
-	
+
 	/**
 	 * Returns whether or not a plan contains a certain course
+	 * 
 	 * @param code
 	 * @return
 	 */
@@ -131,20 +147,22 @@ public class CoursePlan {
 	}
 
 	/**
-	 * Determine if a course's co and pre-requirements have been met in this course plan
+	 * Determine if a course's co and pre-requirements have been met in this course
+	 * plan
+	 * 
 	 * @param semesterPosition - The position of the course in the course plan
-	 * @param course - The course in question
+	 * @param course           - The course in question
 	 */
 	private void validateReqs(int semesterPosition, Course course) {
 		if (semesterPosition > semesters.size() || semesterPosition < 0) {
 			this.isValid &= false;
 			return;
 		}
-		
+
 		ArrayList<ArrayList<Course>> preRequisiteLists = course.getPreRequisites();
 		ArrayList<ArrayList<Course>> coRequisiteLists = course.getCoRequisites();
 		String code = course.getCode();
-		
+
 		// Check co-requisites
 		for (ArrayList<Course> coRequisiteList : coRequisiteLists) {
 			boolean met = coRequisiteMet(coRequisiteList, semesterPosition);
@@ -152,7 +170,7 @@ public class CoursePlan {
 			if (!met)
 				this.validityIssues.add(diagnoseCoRequisiteIssues(coRequisiteList, semesterPosition, code));
 		}
-		
+
 		// Check pre-requisites
 		for (ArrayList<Course> preRequisiteList : preRequisiteLists) {
 			boolean met = preRequisiteMet(preRequisiteList, semesterPosition);
@@ -160,13 +178,16 @@ public class CoursePlan {
 			if (!met)
 				this.validityIssues.add(diagnosePreRequisiteIssues(preRequisiteList, semesterPosition, code));
 		}
-	
+
 	}
-	
+
 	/**
 	 * Determine if a list of co-requisites has been met by a course in semester.
-	 * @param coRequisiteList - An ArrayList of Courses representing co-requisites for a course
-	 * @param semesterPosition - The semester position of a course that must meet the co-requisites
+	 * 
+	 * @param coRequisiteList  - An ArrayList of Courses representing co-requisites
+	 *                         for a course
+	 * @param semesterPosition - The semester position of a course that must meet
+	 *                         the co-requisites
 	 * @return Whether or not the co-requisites have been met
 	 */
 	private boolean coRequisiteMet(ArrayList<Course> coRequisiteList, int semesterPosition) {
@@ -182,12 +203,17 @@ public class CoursePlan {
 		}
 		return requirementMet;
 	}
-	
+
 	/**
-	 * Produces an appropriate error message assuming a co-requisite issue is present with a course
-	 * @param coRequisiteList - An ArrayList of Courses representing co-requisites for a course
-	 * @param semesterPosition - The semester position of a course that must meet the co-requisites 
-	 * @param code - The course code of a course that must meet the co-requisites
+	 * Produces an appropriate error message assuming a co-requisite issue is
+	 * present with a course
+	 * 
+	 * @param coRequisiteList  - An ArrayList of Courses representing co-requisites
+	 *                         for a course
+	 * @param semesterPosition - The semester position of a course that must meet
+	 *                         the co-requisites
+	 * @param code             - The course code of a course that must meet the
+	 *                         co-requisites
 	 * @return A message diagnosing the issue
 	 */
 	private String diagnoseCoRequisiteIssues(ArrayList<Course> coRequisiteList, int semesterPosition, String code) {
@@ -205,11 +231,14 @@ public class CoursePlan {
 		}
 		return message;
 	}
-		
+
 	/**
 	 * Determine if a list of pre-requisites has been met by a course in semester.
-	 * @param preRequisiteList - An ArrayList of Courses representing pre-requisites for a course
-	 * @param semesterPosition - The semester position of a course that must meet the pre-requisites
+	 * 
+	 * @param preRequisiteList - An ArrayList of Courses representing pre-requisites
+	 *                         for a course
+	 * @param semesterPosition - The semester position of a course that must meet
+	 *                         the pre-requisites
 	 * @return Whether or not the pre-requisites have been met
 	 */
 	private boolean preRequisiteMet(ArrayList<Course> preRequisiteList, int semesterPosition) {
@@ -225,12 +254,17 @@ public class CoursePlan {
 		}
 		return requirementMet;
 	}
-	
+
 	/**
-	 * Produces an appropriate error message assuming a pre-requisite issue is present with a course
-	 * @param preRequisiteList - An ArrayList of Courses representing pre-requisites for a course
-	 * @param semesterPosition - The semester position of a course that must meet the pre-requisites 
-	 * @param code - The course code of a course that must meet the pre-requisites
+	 * Produces an appropriate error message assuming a pre-requisite issue is
+	 * present with a course
+	 * 
+	 * @param preRequisiteList - An ArrayList of Courses representing pre-requisites
+	 *                         for a course
+	 * @param semesterPosition - The semester position of a course that must meet
+	 *                         the pre-requisites
+	 * @param code             - The course code of a course that must meet the
+	 *                         pre-requisites
 	 * @return A message diagnosing the issue
 	 */
 	private String diagnosePreRequisiteIssues(ArrayList<Course> preRequisiteList, int semesterPosition, String code) {
@@ -251,13 +285,14 @@ public class CoursePlan {
 
 	/**
 	 * Add a semester to this course plan.
+	 * 
 	 * @param semester - the semester to be added.
 	 */
 	public void addSemester(Semester semester) {
 		if (semester != null)
 			semesters.add(semester);
 	}
-	
+
 	// TODO Clean this up by using org.json maybe?
 	public String semesterListToJson() {
 		String value = "[";
@@ -272,7 +307,7 @@ public class CoursePlan {
 		value += "]";
 		return value;
 	}
-	
+
 	public String semesterListToFullJson() {
 		String value = "[";
 		for (int i = 0; i < semesters.size(); i++) {
@@ -286,24 +321,16 @@ public class CoursePlan {
 		value += "]";
 		return value;
 	}
-	
+
 	public String toJson() {
 		JSONWriter js = new JSONWriter();
-		return "{\n"
-				+ "\"name\": \"" + name + "\",\n "
-				+ "\"validity\":" + isValid + ",\n "
-				+ "\"validityIssues\":" + js.listToJson(validityIssues) + ",\n "
-				+ "\"semesters\":" + semesterListToJson() + "\n "
-				+ "}";
+		return "{\n" + "\"name\": \"" + name + "\",\n " + "\"validity\":" + isValid + ",\n " + "\"validityIssues\":"
+				+ js.listToJson(validityIssues) + ",\n " + "\"semesters\":" + semesterListToJson() + "\n " + "}";
 	}
-	
+
 	public String toFullJson() {
 		JSONWriter js = new JSONWriter();
-		return "{\n"
-				+ "\"name\": \"" + name + "\",\n "
-				+ "\"validity\":" + isValid + ",\n "
-				+ "\"validityIssues\":" + js.listToJson(validityIssues) + ",\n "
-				+ "\"semesters\":" + semesterListToFullJson() + "\n "
-				+ "}";
+		return "{\n" + "\"name\": \"" + name + "\",\n " + "\"validity\":" + isValid + ",\n " + "\"validityIssues\":"
+				+ js.listToJson(validityIssues) + ",\n " + "\"semesters\":" + semesterListToFullJson() + "\n " + "}";
 	}
 }

@@ -32,7 +32,9 @@ public class WebServer {
 
 		// TODO Transition this to database!
 		this.catalog = new Catalog("courses.tsv");
-
+		// Load test degree
+		this.catalog.addDegree("degree.tsv");
+		
 		// TODO REMOVE THIS FOR PRODUCTION!
 		// This is just the test user.
 		User testUser = new User("test", "password", false);
@@ -44,6 +46,8 @@ public class WebServer {
 		testUser.addPlan(newplan);
 		users.add(testUser);
 		users.add(testAdmin);
+		
+		
 
 		server.createContext("/", this::handleStaticFile);
 		server.createContext("/login", this::handleLogin);
@@ -649,7 +653,6 @@ public class WebServer {
 		verifyPost(exchange);
 		User user = authenticateSession(exchange);
 		Map<String, String> formData = getFormData(exchange);
-		System.out.println("Handling meta course...");
 
 		String planName = formData.get("planName");
 		String metaCode = formData.get("metaCode");
@@ -671,7 +674,7 @@ public class WebServer {
 		} else {
 			plan.replaceCourseByCodes(metaCode, course);
 		}
-		System.out.println("Done!");
+
 		sendBackToPreviousPage(exchange);
 	}
 
@@ -877,10 +880,32 @@ public class WebServer {
 		return html;
 	}
 
+	private String degreeMetAsHTML(CoursePlan plan) {
+		ArrayList<String> degreeIssues = catalog.determineIfMeetsDegree(plan);
+		String html = "";
+		if (degreeIssues == null) {
+			html += "<div class=\"validplan\"><p>This plan <em>has no degree.</em><p></div>\n";
+		} else if (degreeIssues.size() == 0) {
+			html += "<div class=\"validplan\"><p>This plan <em>meets degree requirements.</em><p></div>\n";
+		} else {
+			html += "<div class=\"invalidplan\"><p>This plan <em>does not meet degree requirements.</em><p></div>\n";
+
+			html += "<div class=\"validityissues\"><p>The following degree issues have been identified:</p>";
+			html += "<ul>";
+			for (String issue : degreeIssues) {
+				html += String.format("<li>%s</li>", issue);
+			}
+			html += "</ul></div>";
+		}
+		
+		return html;
+	}
+	
 	private String planAsHTML(CoursePlan plan) {
 		plan.determineValidity();
 		String html = "";
 		html += validityAsHTML(plan);
+		html += degreeMetAsHTML(plan);
 		ArrayList<Semester> semesters = plan.getSemesters();
 
 		html += "<div class=\"board\" id=\"" + plan.getName() + "\">\n";
