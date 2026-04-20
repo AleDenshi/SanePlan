@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add New Degree</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <form action="/addDegree" method="POST" id="degreeForm">
+        <div>
+            <label for="name">Degree Name:</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <br>
+        
+        <div>
+            <label for="code">Degree Code:</label>
+            <input type="text" id="code" name="code" required>
+        </div>
+        <br>
+
+        <div>
+            <label for="description">Degree Description:</label><br>
+            <textarea id="description" name="description" rows="4" cols="50"></textarea>
+        </div>
+        <br>
+
+        <fieldset>
+            <legend>Degree Requirements</legend>
+            <div id="requirementsContainer">
+                <div id="requirement1" style="margin-bottom: 5px;">
+                    <label for="requirementName1">Requirement Name 1:</label>
+                    <input type="text" name="requirementName1" id="requirementName1" placeholder="Humanities">
+                    
+                    <label for="requirementCode1">Requirement Code 1:</label>
+                    <input type="text" name="requirementCode1" id="requirementCode1" placeholder="HU 14X">
+                </div>
+            </div>
+            <br>
+            <button type="button" onclick="addRequirement()">Add a new requirement</button>
+        </fieldset>
+
+        <br>
+        <button type="submit">Add Degree</button>
+    </form>
+
+    <script>
+        let requirementCount = 1;
+
+        function addRequirement() {
+            requirementCount++;
+            
+            const container = document.getElementById('requirementsContainer');
+            
+            const newRow = document.createElement('div');
+            newRow.id = 'requirement' + requirementCount;
+            newRow.style.marginBotton = "5px";
+
+            // The template now includes placeholders for every new row added
+            newRow.innerHTML = `
+                <label for="requirementName${requirementCount}">Requirement Name ${requirementCount}:</label>
+                <input type="text" name="requirementName${requirementCount}" id="requirementName${requirementCount}" placeholder="eg. Mathematics">
+                
+                <label for="requirementCode${requirementCount}">Requirement Code ${requirementCount}:</label>
+                <input type="text" name="requirementCode${requirementCount}" id="requirementCode${requirementCount}" placeholder="eg. MA 241">
+            `;
+
+            container.appendChild(newRow);
+        }
+    </script>
+
+</body>
+</html>

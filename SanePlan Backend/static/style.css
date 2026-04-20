@@ -39,7 +39,7 @@ ol, ul {
   z-index: 0;
 }
 
-.planedit, .courseedit, .useredit {
+.planedit, .courseedit, .useredit, .degreeedit {
 	display: inline-block;
 	margin: 0.5em;
 	text-align: left;

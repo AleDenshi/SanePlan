@@ -47,8 +47,6 @@ public class WebServer {
 		users.add(testUser);
 		users.add(testAdmin);
 		
-		
-
 		server.createContext("/", this::handleStaticFile);
 		server.createContext("/login", this::handleLogin);
 		server.createContext("/submitPlan", this::handlePlanSubmission);
@@ -63,7 +61,12 @@ public class WebServer {
 		server.createContext("/addCourse", this::handleAddCourse);
 		server.createContext("/deleteCourse", this::handleDeleteCourse);
 		server.createContext("/editMetaCourse", this::handleEditMetaCourse);
-		// TODO Add user settings
+		server.createContext("/addDegree", this::handleAddDegree);
+		server.createContext("/deleteDegree", this::handleDeleteDegree);
+		// TODO Add handler for deleteDegree
+		// TODO Add handler for editSelf
+		// TODO Add handler for editCourse
+		// TODO Add handler for editUser
 	}
 
 	public void start() {
@@ -359,8 +362,10 @@ public class WebServer {
 		if (user.isAdmin()) {
 			body += addUserAsHTML();
 			body += deleteUserAsHTML();
+			body += editUsernameAsHTML();
 			body += addCourseAsHTML();
 			body += deleteCourseAsHTML();
+			body += deleteDegreeAsHTML();	
 		}
 
 		String response = (new HTMLPage("Dashboard", body)).toString();
@@ -526,6 +531,10 @@ public class WebServer {
 
 		sendBackToPreviousPage(exchange);
 	}
+	
+	private void handleEditUsername(HttpExchange exchange) throws IOException {
+		// TODO Write this!!!
+	}
 
 	private void handleAddCourse(HttpExchange exchange) throws IOException {
 		verifyPost(exchange);
@@ -571,6 +580,58 @@ public class WebServer {
 		catalog.addCourse(newCourse);
 		catalog.buildRequisitesFromValues(values);
 		System.out.println("Done adding " + newCourse);
+		sendBackToPreviousPage(exchange);
+	}
+	
+	/**
+	 * Handle adding a degree.
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleAddDegree(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		authenticateAdmin(exchange);
+		Map<String, String> formData = getFormData(exchange);
+		String name = formData.get("name");
+		String code = formData.get("code");
+		String description = formData.get("description");
+		
+		Degree degree = new Degree(name, code, description);
+		
+		int numRequirements = 1;
+		while (true) {
+			String nameId = "requirementName" + numRequirements;
+			String codeId = "requirementCode" + numRequirements;
+			System.out.println("Processing requirement " + numRequirements);
+			if (formData.containsKey(nameId) && formData.containsKey(codeId)) {
+				String reqName = formData.get(nameId);
+				String reqCode = formData.get(codeId);
+				ArrayList<Course> coursesRequired = catalog.getAllEquivalentCourses(reqCode);
+				DegreeRequirement dr = new DegreeRequirement(reqName);
+				dr.setEquivalentCourses(coursesRequired);
+				degree.addDegreeRequirement(dr);
+				numRequirements++;
+			} else {
+				break;
+			}
+		}
+		catalog.addDegree(degree);
+		sendBackToPreviousPage(exchange);
+	}
+	
+	/**
+	 * Handle deleting a degree.
+	 * @param exchange
+	 * @throws IOException
+	 */
+	private void handleDeleteDegree(HttpExchange exchange) throws IOException {
+		verifyPost(exchange);
+		authenticateAdmin(exchange);
+		Map<String, String> formData = getFormData(exchange);
+		String code = formData.get("code");
+		if (catalog.deleteDegreeByCode(code) == null) {
+			// TODO Tell the user the degree wasn't found
+		}
 		sendBackToPreviousPage(exchange);
 	}
 
@@ -758,7 +819,24 @@ public class WebServer {
 				""";
 		return html;
 	}
+	
 
+
+	private String deleteDegreeAsHTML() {
+		String html = """
+				<form class="degreeedit" method="POST" action="/deleteDegree">
+				<p>Delete a Degree</p>
+				<label>Choose a Degree to delete:</label>
+				<select id="code" name="code">
+				""";
+		for (Degree degree : catalog.getDegrees()) {
+			html += String.format("<option value=\"%s\">%s</option>", degree.getCode(), degree.getCode());
+		}
+
+		html += "</select><br/><input type=\"submit\" value=\"Delete Degree\"></form>";
+		return html;
+	}
+	
 	private String deleteCourseAsHTML() {
 		String html = """
 				<form class="courseedit" method="POST" action="/deleteCourse">
@@ -804,6 +882,27 @@ public class WebServer {
 		}
 
 		html += "</select><br/><input type=\"submit\" value=\"Delete User\"></form>";
+		return html;
+	}
+	
+	private String editUsernameAsHTML() {
+		String html = """
+				<form class="useredit" method="POST" action="/editUsername">
+				<p>Edit a Username</p>
+				<label>Choose a user to edit:</label>
+				<select id="username" name="username">
+				""";
+		for (User user : users) {
+			html += String.format("<option value=\"%s\">%s</option>", user.getUsername(), user.getUsername());
+		}
+
+		html += "</select><br/>";
+		html += """
+				<label for="newUsername">Enter the new Username:</label><br>
+				<input type="text" id="newUsername" name="newUsername"><br>
+				""";
+		
+		html += "<input type=\"submit\" value=\"Edit Username\"></form>";
 		return html;
 	}
 

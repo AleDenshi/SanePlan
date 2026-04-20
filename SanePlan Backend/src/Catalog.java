@@ -15,14 +15,6 @@ public class Catalog {
 	private HashMap<String, ArrayList<String>> codeEquivalencies;
 	private ArrayList<Degree> degrees;
 	
-	public Degree getDegreeByCode(String code) {
-		for (Degree degree : degrees) {
-			if (degree.getCode().equals(code))
-				return degree;
-		}
-		return null;
-	}
-
 	/**
 	 * Constructs a Catalog object from a given file.
 	 * 
@@ -34,7 +26,73 @@ public class Catalog {
 		this.codeEquivalencies = readCodeEquivalenciesFromTSV("equivalents.tsv");
 		readCoursesFromTSV(filename);
 		buildRequisitesFromTSV(filename);
+	
+	}
 
+	public Catalog(ArrayList<Course> courses) {
+		this.courses = courses;
+	}
+
+	public ArrayList<Degree> getDegrees() {
+		return degrees;
+	}
+	
+	public void addCourse(Course course) {
+		if (!courses.contains(course)) {
+			courses.add(course);
+		}
+	}
+	
+	public void addDegree(Degree degree) {
+		if (!degrees.contains(degree)) {
+			degrees.add(degree);
+		}
+	}
+
+	// TODO actually check if the degree exists first
+	public void addDegree(String filename) {
+		Degree degree = readDegreeFromTSV(filename);
+		degrees.add(degree);
+	}
+	
+	/**
+	 * Deletes a degree by code. Returns the Degree if successful, null if it wasn't found.
+	 * @param code
+	 * @return - The Degree being deleted
+	 */
+	public Degree deleteDegreeByCode(String code) {
+		Degree degree = getDegreeByCode(code);
+		if (degrees.remove(degree)) {
+			return degree;
+		}
+		return null;
+	}
+
+	/**
+	 * Get the list of all Courses in the catalog.
+	 * 
+	 * @return - An ArrayList of Courses contained in the Catalog.
+	 */
+	public ArrayList<Course> getCourses() {
+		return courses;
+	}
+
+	public ArrayList<Course> getAllEquivalentCourses(String courseToDecode) {
+		ArrayList<Course> equivalentCourses = new ArrayList<Course>();
+		for (String toDecode : courseToDecode.split("/")) {
+			equivalentCourses.addAll(equivalentCoursesFromString(toDecode));
+		}
+	
+		return equivalentCourses;
+	}
+
+
+	public Degree getDegreeByCode(String code) {
+		for (Degree degree : degrees) {
+			if (degree.getCode().equals(code))
+				return degree;
+		}
+		return null;
 	}
 
 	/**
@@ -54,100 +112,6 @@ public class Catalog {
 		}
 	}
 
-	private HashMap<String, ArrayList<String>> readCodeEquivalenciesFromTSV(String filename) {
-		HashMap<String, ArrayList<String>> readEquivalencies = new HashMap<String, ArrayList<String>>();
-		File file = new File(filename);
-
-		try {
-			Scanner scan = new Scanner(file);
-
-			while (scan.hasNextLine()) {
-				String line = scan.nextLine();
-				String[] values = line.split("	");
-
-				String keyCode = values[0];
-				ArrayList<String> equivalentCodes = new ArrayList<String>();
-				for (int i = 1; i < values.length; i++) {
-					equivalentCodes.add(values[i]);
-				}
-
-				readEquivalencies.put(keyCode, equivalentCodes);
-			}
-			// Done scanning from file
-			scan.close();
-		} catch (Exception e) {
-			System.out.println("Error detected when reading code equivalencies from TSV:");
-			e.printStackTrace();
-			System.exit(-1);
-		}
-		return readEquivalencies;
-
-	}
-
-	public Catalog(ArrayList<Course> courses) {
-		this.courses = courses;
-	}
-
-	public void addCourse(Course course) {
-		if (!courses.contains(course)) {
-			courses.add(course);
-		}
-	}
-
-	/**
-	 * Get the list of all Courses in the catalog.
-	 * 
-	 * @return - An ArrayList of Courses contained in the Catalog.
-	 */
-	public ArrayList<Course> getCourses() {
-		return courses;
-	}
-
-	/**
-	 * Constructs and returns a Course from a JSON object.
-	 * 
-	 * @param jo - The JSON Object to convert to a Course.
-	 * @return - A Course object generated from the JSON object, or null if
-	 *         generation fails.
-	 */
-	public Course makeCourseFromJson(JSONObject jo) {
-		try {
-			String code = jo.getString("code");
-			int credits = jo.getInt("credits");
-			String name = jo.getString("name");
-			String description = jo.getString("description");
-			JSONArray availabilityJA = jo.getJSONArray("availability");
-			ArrayList<SemesterType> availability = new ArrayList<SemesterType>();
-
-			for (int i = 0; i < availabilityJA.length(); i++) {
-				String semesterTypeString = availabilityJA.getString(i);
-				SemesterType type = SemesterType.valueOf(semesterTypeString);
-				availability.add(type);
-			}
-
-			Course course = new Course(code, credits, name, description, availability);
-			JSONArray preRequisiteJAJA = jo.getJSONArray("preRequisites");
-			JSONArray coRequisiteJAJA = jo.getJSONArray("coRequisites");
-
-			for (int i = 0; i < preRequisiteJAJA.length(); i++) {
-				ArrayList<Course> preRequisiteList = jsonArrayToCourseList(preRequisiteJAJA.getJSONArray(i));
-				course.addPreRequisite(preRequisiteList);
-			}
-
-			for (int i = 0; i < coRequisiteJAJA.length(); i++) {
-				ArrayList<Course> coRequisiteList = jsonArrayToCourseList(coRequisiteJAJA.getJSONArray(i));
-				course.addCoRequisite(coRequisiteList);
-			}
-
-			return course;
-
-		} catch (Exception e) {
-			System.out.println("Error when trying to convert JSON to Course.");
-			e.printStackTrace();
-		}
-		return null;
-	}
-
 	/**
 	 * Converts a JSON Array of Course codes into an ArrayList of Courses.
 	 * 
@@ -161,59 +125,6 @@ public class Catalog {
 			courseList.add(requisite);
 		}
 		return courseList;
-	}
-
-	/**
-	 * Constructs and returns a Semester from a JSON object.
-	 * 
-	 * @param jo - The JSON Object to convert to a Semester.
-	 * @return - The Semester converted from the JSON object, or null if conversion
-	 *         failed.
-	 */
-	public Semester makeSemesterFromJson(JSONObject jo) {
-		try {
-			String name = jo.getString("name");
-			int maxCredits = jo.getInt("maxCredits");
-			SemesterType type = SemesterType.valueOf(jo.getString("type"));
-
-			Semester semester = new Semester(name, type, maxCredits);
-			ArrayList<Course> semesterCourses = jsonArrayToCourseList(jo.getJSONArray("courses"));
-			for (Course c : semesterCourses) {
-				semester.addCourse(c);
-			}
-			return semester;
-
-		} catch (Exception e) {
-			System.out.println("Error when trying to convert JSON to Semester.");
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	/**
-	 * Constructs and returns a CoursePlan from a JSON object.
-	 * 
-	 * @param jo - The JSON Object to convert to a CoursePlan.
-	 * @return - The CoursePlan converted from the JSON object, or null if
-	 *         conversion failed.
-	 */
-	public CoursePlan makeCoursePlanFromJson(JSONObject jo) {
-		try {
-			String name = jo.getString("name");
-			CoursePlan coursePlan = new CoursePlan(name);
-			JSONArray ja = jo.getJSONArray("semesters");
-			for (int i = 0; i < ja.length(); i++) {
-				JSONObject semesterJo = ja.getJSONObject(i);
-				Semester semester = makeSemesterFromJson(semesterJo);
-				coursePlan.addSemester(semester);
-			}
-			return coursePlan;
-
-		} catch (Exception e) {
-			System.out.println("Error when trying to convert JSON to a CoursePlan.");
-			e.printStackTrace();
-		}
-		return null;
 	}
 
 	public CoursePlan readCoursePlanFromTSV(String filename) {
@@ -391,68 +302,34 @@ public class Catalog {
 		return equivalencies;
 	}
 
-	// TODO Move File I/O methods to database or File I/O class
 	/**
-	 * Cycles through a TSV file and creates the base entries for courses, without
-	 * requisites.
+	 * Returns a set of Courses from the catalog when given a string array
+	 * containing course codes.
 	 * 
-	 * @param filename - The filename of a TSV file containing course information.
+	 * @param courseCodes - A String array of course codes.
+	 * @return requisiteSet A HashSet of Courses from the code.
 	 */
-	private void readCoursesFromTSV(String filename) {
-		File file = new File(filename);
-
-		try {
-			Scanner scan = new Scanner(file);
-			scan.nextLine();
-			while (scan.hasNextLine()) {
-				String line = scan.nextLine();
-				String[] values = line.split("	");
-
-				// If the file has a gap in it, stop
-				if (values.length < 4)
-					break;
-
-				// Convert to a course
-				Course course = makeCourseFromValues(values);
-				this.courses.add(course);
+	private ArrayList<Course> getCoursesFromCodeArray(String[] courseCodes) {
+		ArrayList<Course> requisiteSet = new ArrayList<Course>();
+		for (String courseCode : courseCodes) {
+			if (courseCode.isEmpty())
+				continue;
+	
+			Course courseRequisite = findCourseByCode(courseCode);
+			// If this is a blank entry, return null to indicate to skip this
+			if (courseRequisite == null) {
+				if (courseCode.contains(":")) {
+					requisiteSet.addAll(equivalentCoursesFromString(courseCode));
+					System.out.println("[INFO] Built " + courseCode);
+				} else {
+					System.out.println("[WARN] Couldn't find/build " + courseCode);
+					return null;
+				}
+			} else {
+				requisiteSet.add(courseRequisite);
 			}
-			// Done scanning from file
-			scan.close();
-		} catch (Exception e) {
-			System.out.println("Error detected when reading courses from TSV:");
-			e.printStackTrace();
-			System.exit(-1);
 		}
-	}
-
-	/**
-	 * Cycles through a TSV file and adds pre-requisites and co-requisites to all
-	 * courses.
-	 * 
-	 * @param filename - The filename of a TSV file containing course information.
-	 */
-	private void buildRequisitesFromTSV(String filename) {
-		File file = new File(filename);
-		try {
-			Scanner scan = new Scanner(file);
-			scan.nextLine();
-			while (scan.hasNextLine()) {
-				String line = scan.nextLine();
-				String[] values = line.split("	");
-				// If the file has a gap in it, stop
-				if (values.length < 4)
-					break;
-
-				// Build requisites
-				buildRequisitesFromValues(values);
-			}
-
-			// Done scanning from file
-			scan.close();
-		} catch (Exception e) {
-			System.out.println("Error detected when trying to build requisites from TSV:");
-			e.printStackTrace();
-		}
+		return requisiteSet;
 	}
 
 	/**
@@ -481,36 +358,6 @@ public class Catalog {
 			ArrayList<Course> requisiteSet = getCoursesFromCodeArray(courseCodes);
 			course.addCoRequisite(requisiteSet);
 		}
-	}
-
-	/**
-	 * Returns a set of Courses from the catalog when given a string array
-	 * containing course codes.
-	 * 
-	 * @param courseCodes - A String array of course codes.
-	 * @return requisiteSet A HashSet of Courses from the code.
-	 */
-	private ArrayList<Course> getCoursesFromCodeArray(String[] courseCodes) {
-		ArrayList<Course> requisiteSet = new ArrayList<Course>();
-		for (String courseCode : courseCodes) {
-			if (courseCode.isEmpty())
-				continue;
-
-			Course courseRequisite = findCourseByCode(courseCode);
-			// If this is a blank entry, return null to indicate to skip this
-			if (courseRequisite == null) {
-				if (courseCode.contains(":")) {
-					requisiteSet.addAll(equivalentCoursesFromString(courseCode));
-					System.out.println("[INFO] Built " + courseCode);
-				} else {
-					System.out.println("[WARN] Couldn't find/build " + courseCode);
-					return null;
-				}
-			} else {
-				requisiteSet.add(courseRequisite);
-			}
-		}
-		return requisiteSet;
 	}
 
 	/**
@@ -577,35 +424,6 @@ public class Catalog {
 		return null;
 	}
 
-	// TODO Remove this once testing is completed
-	public CoursePlan loadCoursePlanFromFile(String filename) {
-		String jsonContent;
-		try {
-			jsonContent = new String(Files.readAllBytes(Paths.get(filename)));
-			JSONObject jo = new JSONObject(jsonContent);
-			CoursePlan plan = makeCoursePlanFromJson(jo);
-			return plan;
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	// TODO actually check if the degree exists first
-	public void addDegree(String filename) {
-		Degree degree = readDegreeFromTSV(filename);
-		degrees.add(degree);
-	}
-
-	public ArrayList<Course> getAllEquivalentCourses(String courseToDecode) {
-		ArrayList<Course> equivalentCourses = new ArrayList<Course>();
-		for (String toDecode : courseToDecode.split("/")) {
-			equivalentCourses.addAll(equivalentCoursesFromString(toDecode));
-		}
-
-		return equivalentCourses;
-	}
-
 	/**
 	 * Determine if a Course meets the requirements.
 	 * @param requirement
@@ -656,6 +474,212 @@ public class Catalog {
 			}
 		}
 		return degreeIssues;
+	}
+
+	// TODO Remove this once testing is completed
+	public CoursePlan loadCoursePlanFromFile(String filename) {
+		String jsonContent;
+		try {
+			jsonContent = new String(Files.readAllBytes(Paths.get(filename)));
+			JSONObject jo = new JSONObject(jsonContent);
+			CoursePlan plan = makeCoursePlanFromJson(jo);
+			return plan;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	/**
+	 * Constructs and returns a Course from a JSON object.
+	 * 
+	 * @param jo - The JSON Object to convert to a Course.
+	 * @return - A Course object generated from the JSON object, or null if
+	 *         generation fails.
+	 */
+	public Course makeCourseFromJson(JSONObject jo) {
+		try {
+			String code = jo.getString("code");
+			int credits = jo.getInt("credits");
+			String name = jo.getString("name");
+			String description = jo.getString("description");
+			JSONArray availabilityJA = jo.getJSONArray("availability");
+			ArrayList<SemesterType> availability = new ArrayList<SemesterType>();
+	
+			for (int i = 0; i < availabilityJA.length(); i++) {
+				String semesterTypeString = availabilityJA.getString(i);
+				SemesterType type = SemesterType.valueOf(semesterTypeString);
+				availability.add(type);
+			}
+	
+			Course course = new Course(code, credits, name, description, availability);
+			JSONArray preRequisiteJAJA = jo.getJSONArray("preRequisites");
+			JSONArray coRequisiteJAJA = jo.getJSONArray("coRequisites");
+	
+			for (int i = 0; i < preRequisiteJAJA.length(); i++) {
+				ArrayList<Course> preRequisiteList = jsonArrayToCourseList(preRequisiteJAJA.getJSONArray(i));
+				course.addPreRequisite(preRequisiteList);
+			}
+	
+			for (int i = 0; i < coRequisiteJAJA.length(); i++) {
+				ArrayList<Course> coRequisiteList = jsonArrayToCourseList(coRequisiteJAJA.getJSONArray(i));
+				course.addCoRequisite(coRequisiteList);
+			}
+	
+			return course;
+	
+		} catch (Exception e) {
+			System.out.println("Error when trying to convert JSON to Course.");
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	/**
+	 * Constructs and returns a Semester from a JSON object.
+	 * 
+	 * @param jo - The JSON Object to convert to a Semester.
+	 * @return - The Semester converted from the JSON object, or null if conversion
+	 *         failed.
+	 */
+	public Semester makeSemesterFromJson(JSONObject jo) {
+		try {
+			String name = jo.getString("name");
+			int maxCredits = jo.getInt("maxCredits");
+			SemesterType type = SemesterType.valueOf(jo.getString("type"));
+	
+			Semester semester = new Semester(name, type, maxCredits);
+			ArrayList<Course> semesterCourses = jsonArrayToCourseList(jo.getJSONArray("courses"));
+			for (Course c : semesterCourses) {
+				semester.addCourse(c);
+			}
+			return semester;
+	
+		} catch (Exception e) {
+			System.out.println("Error when trying to convert JSON to Semester.");
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	/**
+	 * Constructs and returns a CoursePlan from a JSON object.
+	 * 
+	 * @param jo - The JSON Object to convert to a CoursePlan.
+	 * @return - The CoursePlan converted from the JSON object, or null if
+	 *         conversion failed.
+	 */
+	public CoursePlan makeCoursePlanFromJson(JSONObject jo) {
+		try {
+			String name = jo.getString("name");
+			CoursePlan coursePlan = new CoursePlan(name);
+			JSONArray ja = jo.getJSONArray("semesters");
+			for (int i = 0; i < ja.length(); i++) {
+				JSONObject semesterJo = ja.getJSONObject(i);
+				Semester semester = makeSemesterFromJson(semesterJo);
+				coursePlan.addSemester(semester);
+			}
+			return coursePlan;
+	
+		} catch (Exception e) {
+			System.out.println("Error when trying to convert JSON to a CoursePlan.");
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private HashMap<String, ArrayList<String>> readCodeEquivalenciesFromTSV(String filename) {
+		HashMap<String, ArrayList<String>> readEquivalencies = new HashMap<String, ArrayList<String>>();
+		File file = new File(filename);
+	
+		try {
+			Scanner scan = new Scanner(file);
+	
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				String[] values = line.split("	");
+	
+				String keyCode = values[0];
+				ArrayList<String> equivalentCodes = new ArrayList<String>();
+				for (int i = 1; i < values.length; i++) {
+					equivalentCodes.add(values[i]);
+				}
+	
+				readEquivalencies.put(keyCode, equivalentCodes);
+			}
+			// Done scanning from file
+			scan.close();
+		} catch (Exception e) {
+			System.out.println("Error detected when reading code equivalencies from TSV:");
+			e.printStackTrace();
+			System.exit(-1);
+		}
+		return readEquivalencies;
+	
+	}
+
+	/**
+	 * Cycles through a TSV file and adds pre-requisites and co-requisites to all
+	 * courses.
+	 * 
+	 * @param filename - The filename of a TSV file containing course information.
+	 */
+	private void buildRequisitesFromTSV(String filename) {
+		File file = new File(filename);
+		try {
+			Scanner scan = new Scanner(file);
+			scan.nextLine();
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				String[] values = line.split("	");
+				// If the file has a gap in it, stop
+				if (values.length < 4)
+					break;
+	
+				// Build requisites
+				buildRequisitesFromValues(values);
+			}
+	
+			// Done scanning from file
+			scan.close();
+		} catch (Exception e) {
+			System.out.println("Error detected when trying to build requisites from TSV:");
+			e.printStackTrace();
+		}
+	}
+
+	// TODO Move File I/O methods to database or File I/O class
+	/**
+	 * Cycles through a TSV file and creates the base entries for courses, without
+	 * requisites.
+	 * 
+	 * @param filename - The filename of a TSV file containing course information.
+	 */
+	private void readCoursesFromTSV(String filename) {
+		File file = new File(filename);
+	
+		try {
+			Scanner scan = new Scanner(file);
+			scan.nextLine();
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				String[] values = line.split("	");
+	
+				// If the file has a gap in it, stop
+				if (values.length < 4)
+					break;
+	
+				// Convert to a course
+				Course course = makeCourseFromValues(values);
+				this.courses.add(course);
+			}
+			// Done scanning from file
+			scan.close();
+		} catch (Exception e) {
+			System.out.println("Error detected when reading courses from TSV:");
+			e.printStackTrace();
+			System.exit(-1);
+		}
 	}
 
 	/**
